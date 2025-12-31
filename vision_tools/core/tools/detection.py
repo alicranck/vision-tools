@@ -58,6 +58,8 @@ class OpenVocabularyDetector(BaseVisionTool):
         else:
             model = YOLOE(self.model_id)
 
+        print(model)
+
         pos_embeddings = model.get_text_pe(self.vocabulary)
         model.set_classes(self.vocabulary, pos_embeddings)
         onnx_model = self.compile_onnx_model(model, imgsz=self.imgsz)
