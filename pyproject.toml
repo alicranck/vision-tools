@@ -11,7 +11,7 @@ dependencies = [
     "numpy",
     "opencv-python-headless",
     "Pillow",
-    "ultralytics",
+    "ultralytics==8.3.235",
     "transformers",
     "optimum",
     "optimum-intel[openvino]",
@@ -19,7 +19,13 @@ dependencies = [
     "ftfy",
     "regex",
     "pydantic",
-    "pyyaml"
+    "pyyaml",
+    "requests",
+    "onnxslim",
+    "onnxruntime",
+    "supervision==0.26.1",
+    "trackers==2.0.2rc0",
+    "clip @ git+https://github.com/openai/CLIP.git",
 ]
 
 [project.optional-dependencies]
