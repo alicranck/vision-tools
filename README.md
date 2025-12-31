@@ -1,2 +1,7 @@
-# vision-tools
-A suite of ML tools for vision and image processing
+# Vision Core
+
+A general-purpose library for computer vision tasks, including:
+- Object Detection
+- Pose Estimation
+- Image Captioning
+- Video Indexing and Semantic Search

@@ -1,0 +1,5 @@
+model: "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF"
+imgsz: 512
+trigger:
+  type: "scene_change"
+  threshold: 0.2

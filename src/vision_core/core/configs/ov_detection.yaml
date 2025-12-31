@@ -1,0 +1,4 @@
+model: "yoloe-11s-seg.pt" # Model arch / ckpt path
+confidence_threshold: 0.1 # Confidence threshold for detections
+iou_threshold: 0.45        # IoU threshold for NMS
+vid_stride: 8            # Process every Nth frame in video streams

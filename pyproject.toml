@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vision_core"
+version = "0.1.0"
+description = "Core vision/ML tools and engine for video processing"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "Pillow",
+    "chromadb",
+    "ultralytics",
+    "transformers",
+    "optimum",
+    "optimum-intel[openvino]",
+    "openvino",
+    "ftfy",
+    "regex",
+    "pydantic",
+    "pyyaml"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vision_core"]

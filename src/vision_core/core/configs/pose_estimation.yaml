@@ -1,0 +1,3 @@
+model: "yolo11n-pose.pt"
+imgsz: 480
+conf_threshold: 0.3
