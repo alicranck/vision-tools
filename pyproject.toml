@@ -35,5 +35,8 @@ dev = [
     "isort"
 ]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["vision_tools"]
