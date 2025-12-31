@@ -6,14 +6,14 @@ import logging
 import requests
 import atexit
 import shutil
-from vision_core.utils.types import ImageHandle, Any
 from transformers import AutoProcessor, AutoTokenizer
 from optimum.intel.openvino.modeling_visual_language import OVModelForVisualCausalLM, OVWeightQuantizationConfig
 import numpy as np
 import cv2
 
 from .base_tool import BaseVisionTool, ToolKey
-from vision_core.utils.image_utils import base64_encode
+from ...utils.image_utils import base64_encode
+from ...utils.types import ImageHandle, Any
 
 logger = logging.getLogger(__name__)
 

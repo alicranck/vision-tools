@@ -2,10 +2,10 @@ import asyncio
 import cv2
 import os
 import logging
-from vision_core.core.tools.pipeline import VisionPipeline
-from vision_core.utils.image_utils import color_histogram
-from vision_core.utils.types import FrameContext
-from vision_core.data.vector_store import VectorStore
+from ..core.tools.pipeline import VisionPipeline
+from ..utils.image_utils import color_histogram
+from ..utils.types import FrameContext
+
 
 logger = logging.getLogger(__name__)
 
@@ -152,31 +152,4 @@ class VideoInferenceEngine:
             raise ValueError("YouTube links are not supported.")
 
         return video_path
-
-    async def run_indexing(self, vector_store: VectorStore, video_id: str):
-        """
-        Runs the engine in non-realtime mode to index the video.
-        Uses any 'embedding' data found in the pipeline results to populate the vector store.
-        """
-        logger.info(f"Starting indexing for video {video_id}...")
-        
-        # Helper callback to capture data
-        async def _index_callback(data):
-            if "embedding" in data:
-                embedding = data["embedding"]
-                timestamp = data.get("timestamp", 0.0)
-                # We can store frame path if we saved it, but for now let's just use timestamp
-                metadata = {
-                    "video_id": video_id,
-                    "timestamp": timestamp,
-                    "video_path": self.video_path
-                }
-                vector_store.add_embedding(embedding, metadata)
-                logger.debug(f"Indexed frame at {timestamp:.2f}s")
-
-        # Run inference with realtime=False and no buffering
-        async for _ in self.run_inference(on_data=_index_callback, buffer_delay=0, realtime=False):
-            pass # We just consume the stream to drive the pipeline
-        
-        logger.info(f"Indexing complete for video {video_id}.")
 

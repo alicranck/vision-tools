@@ -3,8 +3,8 @@ import numpy as np
 from ultralytics import YOLO
 from ultralytics.engine.results import Keypoints
 from .base_tool import BaseVisionTool, ToolKey
-from vision_core.utils.types import Any, List
-from vision_core.utils.locations import APP_DIR
+from ...utils.types import Any, List
+from ...utils.locations import APP_DIR
 
 DEFAULT_IMAGE_SIZE = 640
 DEFAULT_CONFIDENCE_THRESHOLD = 0.5
