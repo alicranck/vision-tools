@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "vision_core"
+name = "vision_tools"
 version = "0.1.0"
 description = "Core vision/ML tools and engine for video processing"
 requires-python = ">=3.10"
@@ -31,4 +31,4 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vision_core"]
+packages = ["vision_tools"]
