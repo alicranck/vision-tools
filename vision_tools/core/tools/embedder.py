@@ -19,7 +19,6 @@ class CLIPEmbedder(BaseVisionTool):
         return model
 
     def preprocess(self, frame: np.ndarray) -> Any:
-        # CLIP preprocess expects a PIL Image
         pil_image = Image.fromarray(frame)
         image_input = self.preprocess_fn(pil_image).unsqueeze(0).to(self.device)
         return image_input

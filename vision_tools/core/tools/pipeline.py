@@ -8,7 +8,7 @@ from .detection import OpenVocabularyDetector
 from .captioning import LlamaCppCaptioner
 from .pose_estimation import PoseEstimator
 from .embedder import CLIPEmbedder
-from vision_core.utils.types import FrameContext
+from ...utils.types import FrameContext
 
 
 AVAILABLE_TOOL_TYPES = {

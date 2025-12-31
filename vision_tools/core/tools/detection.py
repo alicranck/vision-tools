@@ -9,10 +9,11 @@ import cv2
 import numpy as np
 
 from .base_tool import BaseVisionTool, ToolKey
-from vision_core.utils.image_utils import load_image_pil
-from vision_core.utils.tracking import BoxKalmanFilter
-from vision_core.utils.types import ImageHandle, List, NumpyMask, Any
-from vision_core.utils.locations import APP_DIR
+from ...utils.image_utils import load_image_pil
+from ...utils.tracking import BoxKalmanFilter
+from ...utils.types import ImageHandle, List, NumpyMask, Any
+from ...utils.locations import APP_DIR
+
 
 logger = logging.getLogger(__name__)
 

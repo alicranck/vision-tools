@@ -5,9 +5,9 @@ import torch
 import logging
 from PIL import Image
 
-from vision_core.utils.types import ImageHandle, List, Any, FrameContext
-from vision_core.utils.image_utils import load_image_opencv
-from vision_core.utils.locations import APP_DIR
+from ...utils.types import ImageHandle, List, Any, FrameContext
+from ...utils.image_utils import load_image_opencv
+from ...utils.locations import APP_DIR
 
 logger = logging.getLogger(__name__)
 
