@@ -127,6 +127,11 @@ class VideoInferenceEngine:
                                 timestamp=cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
         
         processed_frame, data = self.tool_pipeline.run_pipeline(frame, context=context)
+        data['metadata'] = {
+            'frame_idx': context.frame_idx,
+            'timestamp': context.timestamp,
+            'scene_change_score': context.scene_change_score
+        }
         
         self.last_frame_idx += 1
         self.last_frame = frame
