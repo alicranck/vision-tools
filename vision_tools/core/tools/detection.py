@@ -58,14 +58,15 @@ class OpenVocabularyDetector(BaseVisionTool):
         else:
             model = YOLOE(self.model_id)
 
-        print(model)
+        logger.debug(model)
 
         pos_embeddings = model.get_text_pe(self.vocabulary)
         model.set_classes(self.vocabulary, pos_embeddings)
-        onnx_model = self.compile_onnx_model(model, imgsz=self.imgsz)
+        onnx_model = self.compile_ov_model(model, imgsz=self.imgsz)
 
         self.tracker = SORTTracker(lost_track_buffer=5, frame_rate=10, 
-                                    minimum_consecutive_frames=2, minimum_iou_threshold=0.2)
+                                    minimum_consecutive_frames=2,
+                                    minimum_iou_threshold=0.2)
         self.tracking_history = defaultdict(list)
 
         return onnx_model
@@ -124,7 +125,7 @@ class OpenVocabularyDetector(BaseVisionTool):
         return results
 
     @staticmethod
-    def compile_onnx_model(model, imgsz):
+    def compile_ov_model(model, imgsz):
         exported_model_path = model.export(format="openvino", simplify=True,
                                 nms=True, imgsz=imgsz, batch=1, dynamic=True)
         ov_model = YOLOE(exported_model_path)
