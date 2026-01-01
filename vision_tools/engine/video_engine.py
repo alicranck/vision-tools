@@ -1,6 +1,7 @@
 import asyncio
 import cv2
 import os
+import traceback
 import logging
 from ..core.tools.pipeline import VisionPipeline
 from ..utils.image_utils import color_histogram
@@ -79,6 +80,7 @@ class VideoInferenceEngine:
         
         except Exception as e:
             logger.error(f"Streaming Error: {e}")
+            logger.error(traceback.format_exc())
         finally:
             if not producer_task.done():
                 producer_task.cancel()
@@ -104,6 +106,7 @@ class VideoInferenceEngine:
 
         except Exception as e:
             logger.error(f"Producer Error: {e}")
+            logger.error(traceback.format_exc())
         finally:
             cap.release()
             await queue.put(None)  # Signal end of stream
