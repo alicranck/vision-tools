@@ -19,7 +19,7 @@ def test_open_vocabulary_detector():
     
     # Run
     # detector.process returns a dict via base_tool
-    results = detector.process(image, {})
+    results, did_run = detector.process(image, {})
     
     # Assert
     assert "boxes" in results

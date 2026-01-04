@@ -6,6 +6,7 @@ import numpy as np
 
 from .base_tool import BaseVisionTool, ToolKey
 
+
 class CLIPEmbedder(BaseVisionTool):
     """
     Tool for generating image embeddings using OpenAI's CLIP model.

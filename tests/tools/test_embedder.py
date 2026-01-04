@@ -17,7 +17,7 @@ def test_clip_embedder():
     embedder = CLIPEmbedder(config["model"], config)
     
     # Run
-    results = embedder.process(image, {})
+    results, did_run = embedder.process(image, {})
     
     # Assert
     assert "embedding" in results

@@ -17,7 +17,7 @@ def test_pose_estimator():
     estimator = PoseEstimator(config["model"], config)
     
     # Run
-    results = estimator.process(image, {})
+    results, did_run = estimator.process(image, {})
     
     # Assert
     assert "poses" in results
