@@ -48,11 +48,12 @@ class VisionPipeline:
         Returns:
             Dict[str, Any]: A dictionary containing the original frame and the aggregated results from all tools.
         """
-        data = {}
+        data = {"tools_run": False}
         for tool in self.tools:
-            tool_results = tool.process(frame, data, context=context)
+            tool_results, tool_run = tool.process(frame, data, context=context)
             data.update(tool_results)
-
+            data["tools_run"] = data["tools_run"] or tool_run
+            
         return frame, data
 
     def extrapolate_last(self, frame: Any) -> Dict[str, Any]:

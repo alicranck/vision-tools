@@ -125,12 +125,15 @@ class VideoInferenceEngine:
         context = FrameContext(frame_idx=self.last_frame_idx + 1,
                                 scene_change_score=scene_change_score,
                                 timestamp=cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
+
+        logger.info(f"Processing frame {context.frame_idx} at {context.timestamp}")
         
         processed_frame, data = self.tool_pipeline.run_pipeline(frame, context=context)
         data['metadata'] = {
             'frame_idx': context.frame_idx,
             'timestamp': context.timestamp,
-            'scene_change_score': context.scene_change_score
+            'scene_change_score': context.scene_change_score,
+            'tools_run': data.get("tools_run", False)
         }
         
         self.last_frame_idx += 1

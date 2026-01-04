@@ -17,7 +17,7 @@ def test_captioner_smolvlm():
     captioner = Captioner(config["model"], config)
     
     # Run
-    results = captioner.process(image, {})
+    results, did_run = captioner.process(image, {})
     
     # Assert
     assert "caption" in results

@@ -143,12 +143,14 @@ class BaseVisionTool(ABC):
             self.last_context = context
             
             new_data = self.postprocess(raw_output, frame.shape)
+            did_run = True
         else:
             new_data = self.extrapolate_last(frame_handle)
+            did_run = False
         
         updated_data = {**data, **new_data}
 
-        return updated_data
+        return updated_data, did_run
     
     def extrapolate_last(self, frame_handle: ImageHandle) -> Any:
         """
