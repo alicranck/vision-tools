@@ -166,7 +166,7 @@ class SigLIP2Embedder(BaseVisionTool):
         return embeddings
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
-        embedding = raw_output.cpu().numpy().tolist()
+        embedding = raw_output.cpu().numpy().squeeze().tolist()
         return {"embedding": embedding}
 
     def encode_text(self, text: str) -> List[float]:
@@ -177,7 +177,7 @@ class SigLIP2Embedder(BaseVisionTool):
         with torch.no_grad():
              raw_output = self.model.get_text_features(**text_input)
         
-        return raw_output.cpu().numpy().tolist()
+        return raw_output.cpu().numpy().squeeze().tolist()
 
     @property
     def output_keys(self) -> List[ToolKey]:
