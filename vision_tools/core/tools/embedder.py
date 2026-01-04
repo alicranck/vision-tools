@@ -1,6 +1,7 @@
 from typing import Any, List
 import clip
 import torch
+from transformers import AutoModel, AutoProcessor, AutoTokenizer
 from PIL import Image
 import numpy as np
 
@@ -55,6 +56,133 @@ class CLIPEmbedder(BaseVisionTool):
     def output_keys(self) -> List[ToolKey]:
         return [
             ToolKey("embedding", list, "CLIP embedding vector of the image or text")
+        ]
+
+    @property
+    def processing_input_keys(self) -> List[ToolKey]:
+        return []
+
+    @property
+    def config_keys(self) -> List[ToolKey]:
+        return []
+    @property
+    def config_keys(self) -> List[ToolKey]:
+        return []
+
+
+class JinaEmbedder(BaseVisionTool):
+    """
+    Tool for generating multimodal embeddings using jinaai/jina-embeddings-v4.
+    """
+    def __init__(self, model_id: str = "jinaai/jina-embeddings-v4", 
+                                config: dict = None, device: str = 'cpu'):
+        if config is None:
+            config = {}
+        super().__init__(model_id, config, device)
+
+    def _load_model(self) -> Any:
+        model = AutoModel.from_pretrained(
+            self.model_id, 
+            trust_remote_code=True, 
+            device_map=self.device
+        )
+        return model
+
+    def preprocess(self, frame: np.ndarray) -> Any:
+        pil_image = Image.fromarray(frame)
+        return pil_image
+
+    def preprocess_text(self, text: str) -> Any:
+        return text
+
+    def inference(self, model_inputs: Any) -> Any:
+        embeddings = self.model.encode_image(model_inputs, task="retrieval")
+        return embeddings
+
+    def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
+        if isinstance(raw_output, torch.Tensor):
+             raw_output = raw_output.cpu().numpy()
+        
+        if isinstance(raw_output, np.ndarray):
+             embedding = raw_output.tolist()
+             if isinstance(embedding[0], list): # Batch size 1
+                 embedding = embedding[0]
+        else:
+            embedding = raw_output
+
+        return {"embedding": embedding}
+
+    def encode_text(self, text: str) -> List[float]:
+        if not self.loaded:
+            raise RuntimeError(f"ERROR: {self.tool_name} is not loaded. Call .load_tool() first.")
+        
+        embeddings = self.model.encode([text], task="retrieval", prompt_name="query")
+        return embeddings[0].tolist()
+
+    @property
+    def output_keys(self) -> List[ToolKey]:
+        return [
+            ToolKey("embedding", list, "Jina embedding vector of the image or text")
+        ]
+
+    @property
+    def processing_input_keys(self) -> List[ToolKey]:
+        return []
+
+    @property
+    def config_keys(self) -> List[ToolKey]:
+        return []
+
+
+class SigLIP2Embedder(BaseVisionTool):
+    """
+    Tool for generating multimodal embeddings using google siglip2.
+    """
+    def __init__(self, model_id: str = "google/siglip2-base-patch16-384",
+                                     config: dict = None, device: str = 'cpu'):
+        if config is None:
+            config = {}
+        super().__init__(model_id, config, device)
+
+    def _load_model(self) -> Any:
+        model = AutoModel.from_pretrained(self.model_id).eval()
+        model.to(self.device)
+        self.processor = AutoProcessor.from_pretrained(self.model_id, use_fast=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        return model
+
+    def preprocess(self, frame: np.ndarray) -> Any:
+        pil_image = Image.fromarray(frame)
+        inputs = self.processor(images=[pil_image], return_tensors="pt")
+        return inputs.to(self.device)
+
+    def preprocess_text(self, text: str) -> Any:
+        tokens = self.tokenizer([text], padding="max_length",
+                    max_length=64, return_tensors="pt")
+        return tokens.to(self.device)
+
+    def inference(self, model_inputs: Any) -> Any:
+        embeddings = self.model.get_image_features(**model_inputs)
+        return embeddings
+
+    def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
+        embedding = raw_output.cpu().numpy().tolist()
+        return {"embedding": embedding}
+
+    def encode_text(self, text: str) -> List[float]:
+        if not self.loaded:
+            raise RuntimeError(f"ERROR: {self.tool_name} is not loaded. Call .load_tool() first.")
+        
+        text_input = self.preprocess_text(text)
+        with torch.no_grad():
+             raw_output = self.model.get_text_features(**text_input)
+        
+        return raw_output.cpu().numpy().tolist()
+
+    @property
+    def output_keys(self) -> List[ToolKey]:
+        return [
+            ToolKey("embedding", list, "SigLIP2 embedding vector of the image or text")
         ]
 
     @property
