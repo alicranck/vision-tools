@@ -1,1 +1,1 @@
-model: "ViT-B/32"
+model: "google/siglip2-base-patch16-384"

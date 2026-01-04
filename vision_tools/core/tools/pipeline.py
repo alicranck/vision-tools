@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from .detection import OpenVocabularyDetector
 from .captioning import LlamaCppCaptioner
 from .pose_estimation import PoseEstimator
-from .embedder import CLIPEmbedder
+from .embedder import CLIPEmbedder, JinaEmbedder, SigLIP2Embedder
 from ...utils.types import FrameContext
 
 
@@ -15,7 +15,7 @@ AVAILABLE_TOOL_TYPES = {
     'ov_detection': OpenVocabularyDetector,
     'captioning': LlamaCppCaptioner,
     'pose_estimation': PoseEstimator,
-    'embedding': CLIPEmbedder
+    'embedding': SigLIP2Embedder # Switched to SigLIP2Embedder
 }
 
 
