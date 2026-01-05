@@ -162,7 +162,8 @@ class SigLIP2Embedder(BaseVisionTool):
         return tokens.to(self.device)
 
     def inference(self, model_inputs: Any) -> Any:
-        embeddings = self.model.get_image_features(**model_inputs)
+        with torch.no_grad():
+            embeddings = self.model.get_image_features(**model_inputs)
         return embeddings
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
