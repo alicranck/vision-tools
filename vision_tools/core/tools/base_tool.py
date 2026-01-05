@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import traceback
+import os
+from pathlib import Path
 import numpy as np
 import torch
 import logging
@@ -7,7 +9,7 @@ from PIL import Image
 
 from ...utils.types import ImageHandle, List, Any, FrameContext
 from ...utils.image_utils import load_image_opencv
-from ...utils.locations import APP_DIR
+from ...utils.locations import APP_DIR, CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,53 @@ class BaseVisionTool(ABC):
         logger.info(f"Trigger for {self.tool_name}: {self.trigger}")
 
         self.load_tool(config)
+
+    def _resolve_model_path(self, model_identifier: str) -> str:
+        """
+        Resolves the local path for a model.
+        1. Checks if it's an existing file or absolute path.
+        2. Checks if it's in the cache.
+        3. Attempts to download it if missing.
+        """
+        # 1. Existing path check
+        if os.path.isfile(model_identifier):
+            return model_identifier
+        
+        # 2. Check Cache
+        if not CACHE_DIR.exists():
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            
+        filename = Path(model_identifier).name
+        cached_path = CACHE_DIR / filename
+        
+        if cached_path.exists():
+            logger.info(f"Found model in cache: {cached_path}")
+            return str(cached_path)
+            
+        # 3. Download
+        print("Model not found in cache. downloading...", cached_path)
+        logger.info(f"Model {filename} not found in cache. downloading...")
+        try:
+            logger.info(f"Downloading {model_identifier} to {cached_path}")
+            downloaded_path = self.download_ckpt(model_identifier, cached_path)
+            if downloaded_path and os.path.exists(downloaded_path):
+                return str(downloaded_path)
+        except NotImplementedError:
+             # Fallback for tools that rely on libraries (like transformers) to handle downloads
+             logger.info(f"{self.tool_name} does not implement manual download, passing identifier through.")
+             return model_identifier
+        except Exception as e:
+            logger.error(f"Failed to download model {model_identifier}: {e}")
+            
+        # Return identifier if resolution fails (library might handle it)
+        return model_identifier
+
+    def download_ckpt(self, model_id: str, destination: Path) -> Path:
+        """
+        Downloads the checkpoint to the destination.
+        Should be implemented by tools that require manual file handling.
+        """
+        raise NotImplementedError("This tool does not implement manual checkpoint download.")
 
     def load_tool(self, config):
         """

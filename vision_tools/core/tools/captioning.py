@@ -10,6 +10,8 @@ from transformers import AutoProcessor, AutoTokenizer
 from optimum.intel.openvino.modeling_visual_language import OVModelForVisualCausalLM, OVWeightQuantizationConfig
 import numpy as np
 import cv2
+from huggingface_hub import snapshot_download
+
 
 from .base_tool import BaseVisionTool, ToolKey
 from ...utils.image_utils import base64_encode
@@ -32,12 +34,17 @@ class Captioner(BaseVisionTool):
         super().__init__(model_id, config, device)
 
     def _load_model(self):
-
-        model = OVModelForVisualCausalLM.from_pretrained(self.model_id)
-        self.processor = AutoProcessor.from_pretrained(self.model_id)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        model_path = self._resolve_model_path(self.model_id)
+        model = OVModelForVisualCausalLM.from_pretrained(model_path)
+        self.processor = AutoProcessor.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
         return model
+
+    def download_ckpt(self, model_id: str, destination: list) -> str:
+        logger.info(f"Downloading {model_id} to {destination}")
+        local_dir = snapshot_download(repo_id=model_id, local_dir=destination)
+        return local_dir
 
     def preprocess(self, frame: np.ndarray) -> np.ndarray:
 
@@ -112,7 +119,8 @@ class LlamaCppCaptioner(BaseVisionTool):
             return s.getsockname()[1]
 
     def _load_model(self):
-        model_path = self.model_id
+        model_path = self._resolve_model_path(self.model_id)
+        
         if os.path.exists(model_path):
             model_locator = 'm'
         else:

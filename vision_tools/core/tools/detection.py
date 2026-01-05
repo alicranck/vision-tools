@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import logging
 from collections import defaultdict
 from trackers import SORTTracker
@@ -39,6 +40,7 @@ class OpenVocabularyDetector(BaseVisionTool):
         self.imgsz = config.get('imgsz', DEFAULT_IMAGE_SIZE)
         self.conf_threshold = config.get('conf_threshold', DEFAULT_CONFIDENCE_THRESHOLD)
         self.vocabulary = config.get('vocabulary', None)
+        self.prompt_free = config.get('prompt_free', False)
         return
 
     def _load_model(self):
@@ -48,20 +50,22 @@ class OpenVocabularyDetector(BaseVisionTool):
         Returns:
             The compiled ONNX/OpenVINO model ready for inference.
         """
-        if self.vocabulary is None:
-            raise ValueError("OpenVocabularyDetector requires a 'vocabulary' list in the config.")
+        if not self.prompt_free and self.vocabulary is None:
+            raise ValueError("OpenVocabularyDetector requires a 'vocabulary' list in the config, unless prompt_free=True.")
         
-        # check if file exists else download to models/
-        if not os.path.isfile(self.model_id):
-            model_path = APP_DIR / "models" / self.model_id
-            model = YOLOE(model_path)
-        else:
-            model = YOLOE(self.model_id)
+        model_name = self.model_id # Initialize with model_id
+        if self.prompt_free:
+             model_name = "yoloe-11s-seg-pf.pt" 
+        
+        resolved_path = self._resolve_model_path(model_name)
+        
+        model = YOLOE(resolved_path)
+        logger.debug(f"Loaded model: {resolved_path}")
 
-        logger.debug(model)
-
-        pos_embeddings = model.get_text_pe(self.vocabulary)
-        model.set_classes(self.vocabulary, pos_embeddings)
+        if not self.prompt_free:
+            pos_embeddings = model.get_text_pe(self.vocabulary)
+            model.set_classes(self.vocabulary, pos_embeddings)
+            
         onnx_model = self.compile_ov_model(model, imgsz=self.imgsz)
 
         self.tracker = SORTTracker(lost_track_buffer=5, frame_rate=10, 
@@ -124,6 +128,14 @@ class OpenVocabularyDetector(BaseVisionTool):
 
         return results
 
+    def download_ckpt(self, model_id: str, destination: Path) -> Path:
+        """
+        Manually downloads the YOLO checkpoint if not found.
+        """
+        model = YOLOE(destination)
+        del model
+        return destination
+
     @staticmethod
     def compile_ov_model(model, imgsz):
         exported_model_path = model.export(format="openvino", simplify=True,
@@ -149,8 +161,14 @@ class OpenVocabularyDetector(BaseVisionTool):
         vocabulary = ToolKey(
             key_name="vocabulary",
             data_type=List[str],
-            description="List of classes for open-vocabulary detection",
-            required=True
+            description="List of classes for open-vocabulary detection (required unless prompt_free=True)",
+            required=False
+        )
+        prompt_free = ToolKey(
+            key_name="prompt_free",
+            data_type=bool,
+            description="Use strict prompt-free model (default: False)",
+            required=False
         )
         image_size = ToolKey(
             key_name="image_size",
@@ -162,4 +180,4 @@ class OpenVocabularyDetector(BaseVisionTool):
             data_type=float,
             description="Confidence threshold for detections (default: 0.25)",
         )
-        return [vocabulary, image_size, confidence]
+        return [vocabulary, prompt_free, image_size, confidence]
