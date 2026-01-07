@@ -175,12 +175,16 @@ class OVSigLIP2Embedder(SigLIP2Embedder):
         quangization_config = OVWeightQuantizationConfig()
 
         if ov_model_path.exists():
-             model = OVModelForZeroShotImageClassification.from_pretrained(ov_model_path, 
-                                                                            quantization_config=quangization_config,
-                                                                            device=self.device)
+             model = OVModelForZeroShotImageClassification.from_pretrained(
+                ov_model_path, device=self.device
+                )
         else:
-             model = OVModelForZeroShotImageClassification.from_pretrained(model_path, export=True, quantization_config=quangization_config,
-                                                                            device=self.device)
+             model = OVModelForZeroShotImageClassification.from_pretrained(
+                model_path, 
+                export=True, 
+                quantization_config=quangization_config,
+                device=self.device
+                )
              model.save_pretrained(ov_model_path)
         
         return model
