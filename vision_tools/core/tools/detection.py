@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import logging
 from collections import defaultdict
@@ -6,14 +5,11 @@ from trackers import SORTTracker
 import supervision as sv
 from ultralytics import YOLOE  # type: ignore
 from ultralytics.engine.results import Boxes  # type: ignore
-import cv2
 import numpy as np
 
 from .base_tool import BaseVisionTool, ToolKey
-from ...utils.image_utils import load_image_pil
 from ...utils.tracking import BoxKalmanFilter
-from ...utils.types import ImageHandle, List, NumpyMask, Any
-from ...utils.locations import APP_DIR
+from ...utils.types import ImageHandle, List, Any, Dict
 
 
 logger = logging.getLogger(__name__)
@@ -66,14 +62,14 @@ class OpenVocabularyDetector(BaseVisionTool):
             pos_embeddings = model.get_text_pe(self.vocabulary)
             model.set_classes(self.vocabulary, pos_embeddings)
             
-        onnx_model = self.compile_ov_model(model, imgsz=self.imgsz)
+        ov_model = self.compile_ov_model(model, imgsz=self.imgsz)
 
         self.tracker = SORTTracker(lost_track_buffer=5, frame_rate=10, 
                                     minimum_consecutive_frames=2,
                                     minimum_iou_threshold=0.2)
         self.tracking_history = defaultdict(list)
 
-        return onnx_model
+        return ov_model
 
     def set_vocabulary(self, classes: list):
         if self.model:
