@@ -57,11 +57,8 @@ NumpyMask = Annotated[np.ndarray, AfterValidator(check_is_numpy_mask)]
 IMG_EXTENSIONS = [ext.lower() for ext in ['jpg', 'jpeg', 'png', 'ppm', 'bmp', 'tiff', "webp"]]
 IMG_MODES = ['1', 'L', 'P', 'RGB', 'RGBA', 'CMYK', 'YCbCr', 'LAB', 'HSV', 'I', 'F']
 
-@dataclass
-class FrameContext:
-    """
-    Metadata associated with a video frame to allow tools to make temporal decisions.
-    """
-    frame_idx: int
-    scene_change_score: float = 0.0
-    timestamp: float = 0.0
+from .schemas import FrameMetadata, ToolState, ModelScale  # noqa: F401
+
+
+# Backward-compatible alias — new code should use FrameMetadata directly
+FrameContext = FrameMetadata

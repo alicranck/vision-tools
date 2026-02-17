@@ -1,15 +1,20 @@
 from pathlib import Path
+import asyncio
 import logging
 from collections import defaultdict
+from typing import Optional, Type
+
 from trackers import SORTTracker
 import supervision as sv
 from ultralytics import YOLOE  # type: ignore
 from ultralytics.engine.results import Boxes  # type: ignore
 import numpy as np
+from pydantic import BaseModel
 
 from .base_tool import BaseVisionTool, ToolKey
 from ...utils.tracking import BoxKalmanFilter
 from ...utils.types import ImageHandle, List, Any, Dict
+from ...utils.schemas import BoundingBox, DetectionResult
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +28,12 @@ class OpenVocabularyDetector(BaseVisionTool):
     """
     Detection tool using an open-vocabulary YOLO model.
     Used for unconstrained zero-shot object detection based on a custom vocabulary.
+    Supports fine-tuning via Ultralytics training API.
     """
+    # Typed I/O contract for pipeline validation
+    OutputSchema = DetectionResult
+    InputSchema = None  # No upstream tool dependency
+
     def __init__(self, model_id, config, device = 'cpu'):
         self.imgsz: int
         self.conf_threshold: float
@@ -42,9 +52,10 @@ class OpenVocabularyDetector(BaseVisionTool):
     def _load_model(self):
         """
         Loads the YOLOE model and initializes the SORT tracker.
+        Automatically selects optimal backend (CUDA or OpenVINO).
         
         Returns:
-            The compiled ONNX/OpenVINO model ready for inference.
+            The model ready for inference.
         """
         if not self.prompt_free and self.vocabulary is None:
             raise ValueError("OpenVocabularyDetector requires a 'vocabulary' list in the config, unless prompt_free=True.")
@@ -61,15 +72,23 @@ class OpenVocabularyDetector(BaseVisionTool):
         if not self.prompt_free:
             pos_embeddings = model.get_text_pe(self.vocabulary)
             model.set_classes(self.vocabulary, pos_embeddings)
-            
-        ov_model = self.compile_ov_model(model, imgsz=self.imgsz)
+        
+        # Select backend based on hardware
+        if self.device == "cuda":
+            # GPU: Keep native YOLO (already optimized for CUDA)
+            compiled_model = model
+            logger.info(f"{self.tool_name}: Using native CUDA backend")
+        else:
+            # CPU: Export to OpenVINO for Intel optimization
+            compiled_model = self.compile_ov_model(model, imgsz=self.imgsz)
+            logger.info(f"{self.tool_name}: Using OpenVINO backend")
 
         self.tracker = SORTTracker(lost_track_buffer=5, frame_rate=10, 
                                     minimum_consecutive_frames=2,
                                     minimum_iou_threshold=0.2)
         self.tracking_history = defaultdict(list)
 
-        return ov_model
+        return compiled_model
 
     def set_vocabulary(self, classes: list):
         if self.model:
@@ -105,13 +124,20 @@ class OpenVocabularyDetector(BaseVisionTool):
         return {"tracks": self.kalman_filters, "class_names": results[0].names}
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
-        """Parses YOLO results and updates the data dict."""
-        output = {
-            "boxes": [{"xyxy": kf.xyxy, "cls": kf.class_idx, "conf": kf.conf, "id": tid} 
-                                                for tid, kf in raw_output["tracks"].items()],
-            "class_names": raw_output["class_names"]
-        }
-        return output
+        """Parses YOLO results into typed BoundingBox schemas."""
+        class_names = raw_output["class_names"]
+        boxes = [
+            BoundingBox(
+                xyxy=list(map(float, kf.xyxy)),
+                class_id=int(kf.class_idx),
+                confidence=float(kf.conf),
+                tracker_id=int(tid),
+                class_name=class_names.get(int(kf.class_idx)),
+            )
+            for tid, kf in raw_output["tracks"].items()
+        ]
+        result = DetectionResult(boxes=boxes, class_names=class_names)
+        return result.model_dump()
     
     def extrapolate_last(self, frame_handle: ImageHandle) -> Any:
         for track_id, kalman_filter in self.kalman_filters.items():
@@ -123,6 +149,54 @@ class OpenVocabularyDetector(BaseVisionTool):
                                     None)
 
         return results
+
+    # ------------------------------------------------------------------
+    # Training support (Ultralytics YOLO fine-tuning)
+    # ------------------------------------------------------------------
+
+    async def _train_impl(self, dataset_ref: str, config: dict) -> None:
+        """
+        Fine-tune the YOLO model on a user-provided dataset.
+        
+        Args:
+            dataset_ref: Path to a YOLO-format dataset YAML file.
+            config: Training hyperparameters:
+                - epochs (int): Number of training epochs (default: 50)
+                - batch_size (int): Batch size (default: 16)
+                - imgsz (int): Training image size (default: 640)
+                - lr0 (float): Initial learning rate (default: 0.01)
+                - save_dir (str): Directory to save checkpoints
+        """
+        epochs = config.get('epochs', 50)
+        batch_size = config.get('batch_size', 16)
+        imgsz = config.get('imgsz', self.imgsz)
+        lr0 = config.get('lr0', 0.01)
+        save_dir = config.get('save_dir', None)
+
+        train_kwargs = {
+            'data': dataset_ref,
+            'epochs': epochs,
+            'batch': batch_size,
+            'imgsz': imgsz,
+            'lr0': lr0,
+            'device': self.device,
+            'verbose': True,
+        }
+        if save_dir:
+            train_kwargs['project'] = save_dir
+
+        logger.info(f"{self.tool_name}: Starting YOLO training with config: {train_kwargs}")
+        
+        # Run training in a thread to avoid blocking the async loop
+        results = await asyncio.to_thread(
+            self.model.train, **train_kwargs
+        )
+        
+        logger.info(f"{self.tool_name}: Training complete. Results: {results}")
+
+    # ------------------------------------------------------------------
+    # Model download and compilation
+    # ------------------------------------------------------------------
 
     def download_ckpt(self, model_id: str, destination: Path) -> Path:
         """

@@ -1,34 +1,45 @@
-import pytest
-import cv2
-import numpy as np
-import os
-from vision_tools.core.tools.pose_estimation import PoseEstimator
-from vision_tools.utils.image_utils import load_image_opencv
-from test_utils import load_config
+"""
+Pose estimation tool tests — single-frame and batch.
+"""
 
 
-def test_pose_estimator():
-    # Setup
-    test_image_path = os.path.join(os.path.dirname(__file__), "../assets", "test_image.png")
-    image = load_image_opencv(test_image_path)
+class TestPoseEstimator:
+    """Test PoseEstimator with real model."""
 
-    config = load_config("pose_estimation")
-    
-    estimator = PoseEstimator(config["model"], config)
-    
-    # Run
-    results, did_run = estimator.process(image, {})
-    
-    # Assert
-    assert "poses" in results
-    assert isinstance(results["poses"], list)
-    
-    if len(results["poses"]) > 0:
-        first_pose = results["poses"][0]
-        assert "keypoints" in first_pose
-        assert len(first_pose["keypoints"]) == 17 # standard COCO pose
-        
-    print(f"Detected {len(results['poses'])} poses.")
+    def test_pose_single_frame(self, pose_estimator, test_image):
+        """Detect pose keypoints in test image."""
+        results, did_run = pose_estimator.process(test_image, {})
 
-if __name__ == "__main__":
-    test_pose_estimator()
+        assert did_run is True
+        assert "poses" in results
+        assert isinstance(results["poses"], list)
+
+        # PoseResult.model_dump() structure
+        if results["poses"]:
+            pose = results["poses"][0]
+            assert "person_id" in pose
+            assert "keypoints" in pose
+            assert len(pose["keypoints"]) == 17  # COCO keypoints
+
+            kp = pose["keypoints"][0]
+            assert "x" in kp
+            assert "y" in kp
+            assert "confidence" in kp
+
+        print(f"Detected {len(results['poses'])} poses")
+
+    def test_pose_finds_person(self, pose_estimator, test_image):
+        """Should detect at least one pose in the test image (has a person)."""
+        results, _ = pose_estimator.process(test_image, {})
+        assert len(results["poses"]) >= 1, "Expected at least one pose detection"
+
+    def test_pose_batch(self, pose_estimator, test_image):
+        """Batch of duplicated images should produce consistent results."""
+        batch_results = pose_estimator.process_batch([test_image, test_image])
+
+        assert len(batch_results) == 2
+        for r in batch_results:
+            assert "poses" in r
+
+        # Same image → same pose count
+        assert len(batch_results[0]["poses"]) == len(batch_results[1]["poses"])

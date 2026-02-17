@@ -27,6 +27,7 @@ dependencies = [
     "supervision==0.26.1",
     "trackers==2.0.2rc0",
     "clip @ git+https://github.com/openai/CLIP.git",
+    "psutil",  # For CPU/RAM detection
 ]
 
 [project.optional-dependencies]

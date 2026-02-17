@@ -1,43 +1,48 @@
-import pytest
-import cv2
-import numpy as np
-import os
-from vision_tools.core.tools.detection import OpenVocabularyDetector
-from vision_tools.utils.image_utils import load_image_opencv
-from test_utils import load_config
+"""
+Detection tool tests — single-frame and batch.
+"""
 
 
-def test_open_vocabulary_detector():
-    # Setup
-    test_image_path = os.path.join(os.path.dirname(__file__), "../assets", "test_image.png")
-    image = load_image_opencv(test_image_path)
-    
-    config = load_config("ov_detection")
-    config["vocabulary"] = ["person", "car"]
-    
-    detector = OpenVocabularyDetector(config["model"], config)
-    
-    # Run
-    # detector.process returns a dict via base_tool
-    results, did_run = detector.process(image, {})
-    
-    # Assert
-    assert "boxes" in results
-    assert "class_names" in results
-    assert isinstance(results["boxes"], list)
-    
-    # Check if we detected something (optional but good for this specific image)
-    # The generated image has a person and a car.
-    found_person = any(box["cls"] == detector.vocabulary.index("person") for box in results["boxes"])
-    found_car = any(box["cls"] == detector.vocabulary.index("car") for box in results["boxes"])
-    
-    print(f"Detected {len(results['boxes'])} objects.")
-    for box in results["boxes"]:
-        print(f"ID: {box['id']}, Class: {results['class_names'][box['cls']]}, Conf: {box['conf']:.2f}")
+class TestDetection:
+    """Test OpenVocabularyDetector with real model."""
 
-    # Note: since it's zero-shot, we might not always get it perfectly, but basic structure should hold.
-    assert len(results["boxes"]) >= 0 
+    def test_detection_single_frame(self, detector, test_image):
+        """Basic detection on test image (person + car scene)."""
+        results, did_run = detector.process(test_image, {})
 
+        assert did_run is True
+        assert "boxes" in results
+        assert "class_names" in results
+        assert isinstance(results["boxes"], list)
 
-if __name__ == "__main__":
-    test_open_vocabulary_detector()
+        # Verify box structure matches DetectionResult.model_dump()
+        if results["boxes"]:
+            box = results["boxes"][0]
+            assert "xyxy" in box
+            assert "class_id" in box
+            assert "confidence" in box
+            assert len(box["xyxy"]) == 4
+
+        print(f"Detected {len(results['boxes'])} objects")
+        for box in results["boxes"]:
+            cname = box.get("class_name", results["class_names"].get(box["class_id"]))
+            print(f"  {cname}: conf={box['confidence']:.2f}, xyxy={box['xyxy']}")
+
+    def test_detection_finds_person(self, detector, test_image):
+        """Should detect at least one person in the test image."""
+        results, _ = detector.process(test_image, {})
+        person_boxes = [b for b in results["boxes"] if b.get("class_name") == "person"]
+        assert len(person_boxes) >= 1, "Expected at least one person detection"
+
+    def test_detection_batch(self, detector, test_image):
+        """Batch of duplicated images should produce consistent results."""
+        batch = [test_image, test_image]
+        batch_results = detector.process_batch(batch)
+
+        assert len(batch_results) == 2
+        for result in batch_results:
+            assert "boxes" in result
+            assert isinstance(result["boxes"], list)
+
+        # Both frames are identical, so detection counts should match
+        assert len(batch_results[0]["boxes"]) == len(batch_results[1]["boxes"])

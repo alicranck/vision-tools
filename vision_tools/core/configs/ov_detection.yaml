@@ -1,4 +1,14 @@
-model: "yoloe-11s-seg.pt" # Model arch / ckpt path
-confidence_threshold: 0.1 # Confidence threshold for detections
-iou_threshold: 0.45        # IoU threshold for NMS
-vid_stride: 8            # Process every Nth frame in video streams
+models:
+  speed:
+    id: "yoloe-11n-seg.pt"
+    min_vram_gb: 0
+  balanced:
+    id: "yoloe-11s-seg.pt"
+    min_vram_gb: 4
+  accuracy:
+    id: "yoloe-11m-seg.pt"
+    min_vram_gb: 8
+
+confidence_threshold: 0.1
+iou_threshold: 0.45
+vid_stride: 8

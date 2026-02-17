@@ -1,1 +1,10 @@
-model: "google/siglip2-base-patch16-384"
+models:
+  speed:
+    id: "google/siglip2-base-patch16-256"
+    min_vram_gb: 0
+  balanced:
+    id: "google/siglip2-base-patch16-384"
+    min_vram_gb: 4
+  accuracy:
+    id: "google/siglip2-large-patch16-384"
+    min_vram_gb: 8

@@ -1,30 +1,29 @@
+"""
+Captioning tool tests.
+
+Skipped by default since SmolVLM2 / llama.cpp are heavy for CI.
+"""
 import pytest
-import os
-import numpy as np
-from vision_tools.core.tools.captioning import Captioner
-from vision_tools.utils.image_utils import load_image_opencv
-from test_utils import load_config
 
 
-@pytest.mark.skip(reason="SmolVLM2 can be very heavy for CI/CD environments")
-def test_captioner_smolvlm():
-    # Setup
-    test_image_path = os.path.join(os.path.dirname(__file__), "../assets", "test_image.png")
-    image = load_image_opencv(test_image_path)
-    
-    config = load_config("captioning")
-    
-    captioner = Captioner(config["model"], config)
-    
-    # Run
-    results, did_run = captioner.process(image, {})
-    
-    # Assert
-    assert "caption" in results
-    assert isinstance(results["caption"], str)
-    assert len(results["caption"]) > 0
-    
-    print(f"Generated caption: {results['caption']}")
+@pytest.mark.skip(reason="SmolVLM2 is too heavy for local CI")
+class TestCaptioner:
+    """Test Captioner with SmolVLM2 model."""
 
-if __name__ == "__main__":
-    test_captioner_smolvlm()
+    def test_caption_single_frame(self, test_image):
+        from vision_tools.core.tools.captioning import Captioner
+        from tests.tools.conftest import load_config
+
+        config = load_config("captioning")
+        captioner = Captioner(config.get("model"), config)
+        results, did_run = captioner.process(test_image, {})
+
+        assert did_run is True
+        assert "caption" in results
+        # CaptionResult.model_dump() structure
+        cap = results["caption"]
+        assert "text" in cap
+        assert isinstance(cap["text"], str)
+        assert len(cap["text"]) > 0
+
+        print(f"Caption: {cap['text']}")

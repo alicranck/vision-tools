@@ -1,12 +1,25 @@
+"""
+VideoInferenceEngine — Orchestrates video processing with dynamic batching.
+
+Connects: FrameProducer → DynamicBatcher → Pipeline → output
+
+Supports two modes:
+1. Streaming (legacy): yields MJPEG frames for real-time display
+2. Batch processing: processes entire video and collects all results
+"""
 import asyncio
 import cv2
-import os
-import traceback
 import logging
-from ..core.tools.pipeline import VisionPipeline
-from ..utils.image_utils import color_histogram
-from ..utils.types import FrameContext
+import traceback
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
+import numpy as np
+
+from ..core.tools.pipeline import VisionPipeline
+from ..utils.schemas import BatchPayload, FrameMetadata, FrameResult
+from ..utils.types import FrameContext
+from .frame_producer import FrameProducer
+from .batcher import DynamicBatcher
 
 logger = logging.getLogger(__name__)
 
@@ -14,43 +27,62 @@ logger = logging.getLogger(__name__)
 DELAY_SECONDS_DEFAULT = 3.0
 MAX_QUEUE_SIZE = 300
 
+
 class VideoInferenceEngine:
     """
-    Orchestrates the video processing pipeline.
-    Handles video reading, pipeline execution, and frame serving.
-    Uses a producer-consumer pattern to ensure smooth streaming.
+    Orchestrates the video processing pipeline with dynamic batching.
+    
+    Connects FrameProducer → DynamicBatcher → VisionPipeline, supporting
+    both real-time streaming and offline batch processing modes.
     """
-    def __init__(self, tool_pipeline: VisionPipeline, video_path: str):
-        """
-        Initializes the VideoInferenceEngine.
 
+    def __init__(self, tool_pipeline: VisionPipeline, video_path: str,
+                 max_batch_size: int = 16, max_wait_ms: float = 50.0):
+        """
         Args:
-            tool_pipeline (VisionPipeline): The vision pipeline to process frames.
-            video_path (str): Path to the video file or URL.
+            tool_pipeline: The vision pipeline to process frames
+            video_path: Path to video file or URL
+            max_batch_size: Max frames per batch
+            max_wait_ms: Max wait time before flushing partial batch
         """
-        self.video_path = self._resolve_video_source(video_path)
         self.tool_pipeline = tool_pipeline
-        self.video_fps = None
-        self.last_frame_idx = -1
-        self.last_frame = None
+        self.producer = FrameProducer(video_path)
+        self.batcher = DynamicBatcher(
+            max_batch_size=max_batch_size,
+            max_wait_ms=max_wait_ms,
+        )
+        self.video_path = self.producer.video_path
 
-    async def run_inference(self, on_data=None, 
-                             buffer_delay: float = DELAY_SECONDS_DEFAULT,
-                              max_queue_size: int = MAX_QUEUE_SIZE,
-                              realtime: bool = True):
+    # ------------------------------------------------------------------
+    # Mode 1: Real-time streaming (legacy compatible)
+    # ------------------------------------------------------------------
+
+    async def run_inference(self, on_data: Optional[Callable] = None,
+                           buffer_delay: float = DELAY_SECONDS_DEFAULT,
+                           max_queue_size: int = MAX_QUEUE_SIZE,
+                           realtime: bool = True) -> AsyncGenerator:
         """
-        Starts the inference process and yields processed frames.
+        Stream processed frames as MJPEG chunks.
+        Backward-compatible with the original VideoInferenceEngine API.
         
         Args:
-            on_data (callable, optional): Async callback for sending metadata to the client.
-            buffer_delay (float): Time in seconds to buffer before starting the stream.
-            max_queue_size (int): Maximum number of items in the producer-consumer queue.
+            on_data: Async callback for frame metadata
+            buffer_delay: Seconds to buffer before streaming
+            realtime: If True, pace output to match video FPS
             
         Yields:
-            bytes: MJPEG frame chunks.
+            bytes: MJPEG frame chunks
         """
-        queue = asyncio.Queue(maxsize=max_queue_size)
-        producer_task = asyncio.create_task(self._inference_producer(queue))
+        frame_queue = asyncio.Queue(maxsize=max_queue_size)
+        batch_queue = asyncio.Queue(maxsize=max_queue_size // 4)
+
+        # Start producer and batcher as concurrent tasks
+        producer_task = asyncio.create_task(
+            self.producer.produce(frame_queue)
+        )
+        batcher_task = asyncio.create_task(
+            self.batcher.run(frame_queue, batch_queue)
+        )
 
         if realtime:
             logger.info(f"Buffering for {buffer_delay} seconds...")
@@ -58,109 +90,136 @@ class VideoInferenceEngine:
 
         try:
             while True:
-                if producer_task.done() and queue.empty():
+                # Check if everything is done
+                if batcher_task.done() and batch_queue.empty():
                     break
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=1.0)
-                    if item is None:
-                        break
 
-                    frame_bytes, data = item
+                try:
+                    batch = await asyncio.wait_for(batch_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                if batch is None:
+                    break
+
+                # Process the batch through the pipeline
+                processed = self.tool_pipeline.process_batch_payload(batch)
+
+                # Yield each frame as MJPEG
+                for i, frame in enumerate(processed.frames):
+                    metadata = processed.frame_metadatas[i]
+                    result = processed.frame_results[i] if i < len(processed.frame_results) else None
+
+                    data = {
+                        'metadata': {
+                            'frame_idx': metadata.frame_idx,
+                            'timestamp': metadata.timestamp,
+                            'scene_change_score': metadata.scene_change_score,
+                            'tools_run': result.tools_run if result else False,
+                        }
+                    }
+                    if result:
+                        data.update(result.results)
+
                     if on_data:
                         await on_data(data)
+
+                    _, buffer = cv2.imencode(
+                        '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70]
+                    )
+                    frame_bytes = buffer.tobytes()
 
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-                    if realtime and self.video_fps and self.video_fps > 0:
-                        await asyncio.sleep(1.0 / self.video_fps)
+                    if realtime and self.producer.video_fps and self.producer.video_fps > 0:
+                        await asyncio.sleep(1.0 / self.producer.video_fps)
 
-                except asyncio.TimeoutError:
-                    continue
-        
         except Exception as e:
-            logger.error(f"Streaming Error: {e}")
+            logger.error(f"Streaming error: {e}")
             logger.error(traceback.format_exc())
         finally:
-            if not producer_task.done():
-                producer_task.cancel()
-                try:
-                    await producer_task
-                except asyncio.CancelledError:
-                    pass
+            for task in [producer_task, batcher_task]:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
-    async def _inference_producer(self, queue: asyncio.Queue):
-        cap = cv2.VideoCapture(self.video_path)
-        if not cap.isOpened():
-            logger.error(f"Error opening video stream: {self.video_path}")
-            await queue.put(None)
-            return
+    # ------------------------------------------------------------------
+    # Mode 2: Batch processing (new API)
+    # ------------------------------------------------------------------
+
+    async def process_video(self, on_batch: Optional[Callable] = None,
+                           max_queue_size: int = MAX_QUEUE_SIZE) -> List[FrameResult]:
+        """
+        Process entire video and return all frame results.
+        
+        Args:
+            on_batch: Optional async callback called with each processed BatchPayload
+            max_queue_size: Queue size limit
+            
+        Returns:
+            List of FrameResult for every processed frame
+        """
+        frame_queue = asyncio.Queue(maxsize=max_queue_size)
+        batch_queue = asyncio.Queue(maxsize=max_queue_size // 4)
+
+        all_results: List[FrameResult] = []
+
+        producer_task = asyncio.create_task(
+            self.producer.produce(frame_queue)
+        )
+        batcher_task = asyncio.create_task(
+            self.batcher.run(frame_queue, batch_queue)
+        )
+
         try:
-            self.video_fps = cap.get(cv2.CAP_PROP_FPS)
             while True:
-                result = await asyncio.to_thread(self._process_next_frame, cap)                
-                if result is None:
+                if batcher_task.done() and batch_queue.empty():
                     break
 
-                await queue.put(result)
+                try:
+                    batch = await asyncio.wait_for(batch_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
 
-        except Exception as e:
-            logger.error(f"Producer Error: {e}")
-            logger.error(traceback.format_exc())
+                if batch is None:
+                    break
+
+                processed = self.tool_pipeline.process_batch_payload(batch)
+                all_results.extend(processed.frame_results)
+
+                if on_batch:
+                    await on_batch(processed)
+
+                logger.info(
+                    f"Processed batch {processed.batch_id}: "
+                    f"{len(processed)} frames (total: {len(all_results)})"
+                )
+
         finally:
-            cap.release()
-            await queue.put(None)  # Signal end of stream
+            for task in [producer_task, batcher_task]:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
-    def _process_next_frame(self, cap):
-        ret, frame = cap.read()
-        if not ret:
-            return None
+        logger.info(f"Video processing complete: {len(all_results)} frames")
+        return all_results
 
-        scene_change_score = 0.0
-        if self.last_frame is not None:
-            scene_change_score = self.hist_distance(self.last_frame, frame)
-        else:
-            scene_change_score = 1.0
+    # ------------------------------------------------------------------
+    # Legacy compatibility
+    # ------------------------------------------------------------------
 
-        context = FrameContext(frame_idx=self.last_frame_idx + 1,
-                                scene_change_score=scene_change_score,
-                                timestamp=cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
+    @property
+    def video_fps(self) -> Optional[float]:
+        return self.producer.video_fps
 
-        logger.info(f"Processing frame {context.frame_idx} at {context.timestamp}")
-        
-        processed_frame, data = self.tool_pipeline.run_pipeline(frame, context=context)
-        data['metadata'] = {
-            'frame_idx': context.frame_idx,
-            'timestamp': context.timestamp,
-            'scene_change_score': context.scene_change_score,
-            'tools_run': data.get("tools_run", False)
-        }
-        
-        self.last_frame_idx += 1
-        self.last_frame = frame
-
-        _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        frame_bytes = buffer.tobytes()
-        
-        return frame_bytes, data
-            
     @staticmethod
     def hist_distance(frame1, frame2) -> float:
-        hist1 = color_histogram(frame1)
-        hist2 = color_histogram(frame2)
-        dist = cv2.compareHist(hist1, hist2, cv2.HISTCMP_BHATTACHARYYA)
-        return dist
-
-    def _resolve_video_source(self, video_path: str) -> str:
-        """
-        Resolves the video source from a path or URL.
-        Handles local files, YouTube links, and direct URLs.
-        """
-        if os.path.exists(video_path):
-            return os.path.abspath(video_path)
-        
-        if "youtube.com" in video_path or "youtu.be" in video_path:
-            raise ValueError("YouTube links are not supported.")
-
-        return video_path
-
+        """Legacy: use FrameProducer._hist_distance instead."""
+        return FrameProducer._hist_distance(frame1, frame2)

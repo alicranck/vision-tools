@@ -1,29 +1,47 @@
+"""
+BaseVisionTool — Abstract base class for all vision tools in the VisionPilot framework.
+
+Provides:
+- Lifecycle management (load / unload / state machine)
+- Typed I/O contracts via Pydantic schemas
+- Single-frame and batch processing
+- Training interface with state transitions
+- Resource-aware model selection and device detection
+- Trigger logic for frame-skipping (stride, scene change, time)
+"""
 from abc import ABC, abstractmethod
 import traceback
 import os
 from pathlib import Path
+from typing import Dict, List, Optional, Type
+
 import numpy as np
 import torch
 import logging
 from PIL import Image
+from pydantic import BaseModel
 
-from ...utils.types import ImageHandle, List, Any, FrameContext
+from ...utils.types import ImageHandle, Any, FrameContext
 from ...utils.image_utils import load_image_opencv
 from ...utils.locations import APP_DIR, CACHE_DIR
+from ...utils.resource_monitor import get_system_resources, SystemResources
+from ...utils.schemas import (
+    ToolState, ModelScale, FrameMetadata, FrameResult,
+    ToolIOContract,
+)
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Legacy ToolKey — kept for backward compat during migration
+# ---------------------------------------------------------------------------
+
 class ToolKey:
     """
     A descriptor for a data key provided or required by a tool.
-    This acts as a manifest entry for the tool's inputs and outputs.
     
-    Attributes:
-        key_name (str): The name of the key in the data dictionary.
-        data_type (Any): The expected data type of the value.
-        description (str): A brief description of what this data represents.
-        required (bool): Whether this key is mandatory for the tool to function.
+    .. deprecated:: Use ToolIOContract + Pydantic OutputSchema instead.
     """
     def __init__(self, key_name: str, data_type: Any, description: str,
                  required: bool = False):
@@ -33,21 +51,67 @@ class ToolKey:
         self.required = required
 
     def __repr__(self):
-        return f"ToolKey(key='{self.key_name}', type={self.data_type.__name__}, required={self.required})"
+        return f"ToolKey(key='{self.key_name}', type={getattr(self.data_type, '__name__', self.data_type)}, required={self.required})"
 
+
+# ---------------------------------------------------------------------------
+# BaseVisionTool
+# ---------------------------------------------------------------------------
 
 class BaseVisionTool(ABC):
     """
     Abstract Base Class for a modular vision tool.
+    
+    Every concrete tool (detector, embedder, captioner, etc.) inherits from this
+    and implements the abstract methods for its specific model.
+    
+    Args:
+        model_id: Model identifier or path (override, or use config-based selection if None)
+        config: Tool configuration dict (may contain 'models' schema for variant selection)
+        device: Device to run on ('cpu', 'cuda', or None for auto-detect)
+        mode: Performance mode ('speed', 'balanced', 'accuracy', 'auto')
     """
-    def __init__(self, model_id: str, config: dict, 
-                 device: str = 'cpu'):
-        self.model_id : str = model_id
-        self.device: str = device
+    # Valid mode options
+    VALID_MODES = ('speed', 'balanced', 'accuracy', 'auto')
 
-        self.model : Any
-        self.loaded: bool = False
+    # --- Typed I/O contracts (override in subclasses) ---
+    # Subclasses should set these to Pydantic BaseModel subclasses
+    # to enable pipeline validation. E.g.:
+    #   OutputSchema = DetectionResult
+    OutputSchema: Optional[Type[BaseModel]] = None
+    InputSchema: Optional[Type[BaseModel]] = None
+
+    def __init__(self, model_id: str = None, config: dict = None, 
+                 device: str = None, mode: str = 'auto'):
+        if config is None:
+            config = {}
+            
+        # Validate mode
+        if mode not in self.VALID_MODES:
+            raise ValueError(f"Invalid mode '{mode}'. Must be one of {self.VALID_MODES}")
+        self.mode = mode
+        
+        # Detect system resources for scaling
+        self.resources: SystemResources = get_system_resources()
+        
+        # Auto-detect device if not specified
+        if device is None:
+            self.device = "cuda" if self.resources.has_gpu else "cpu"
+        else:
+            self.device = device
+
+        # Set tool identity early (needed by _resolve_model_from_config)
+        self.model: Any = None
         self.tool_name: str = self.__class__.__name__
+
+        # Resolve model_id from config if not provided explicitly
+        if model_id is None:
+            self.model_id = self._resolve_model_from_config(config)
+        else:
+            self.model_id = model_id
+
+        # --- State machine ---
+        self._state: ToolState = ToolState.UNTRAINED
 
         self.last_result: Any = None
         self.last_context: FrameContext = None
@@ -57,6 +121,75 @@ class BaseVisionTool(ABC):
         logger.info(f"Trigger for {self.tool_name}: {self.trigger}")
 
         self.load_tool(config)
+
+    # ------------------------------------------------------------------
+    # State machine
+    # ------------------------------------------------------------------
+
+    @property
+    def state(self) -> ToolState:
+        return self._state
+
+    @state.setter
+    def state(self, new_state: ToolState):
+        if not self._state.can_transition_to(new_state):
+            raise ValueError(
+                f"{self.tool_name}: Invalid state transition "
+                f"{self._state.value} → {new_state.value}"
+            )
+        old = self._state
+        self._state = new_state
+        logger.info(f"{self.tool_name}: state {old.value} → {new_state.value}")
+
+    @property
+    def loaded(self) -> bool:
+        """Backward-compatible: tool is loaded if state is BASE or TUNED."""
+        return self._state in (ToolState.BASE, ToolState.TUNED)
+
+    # ------------------------------------------------------------------
+    # Model resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_model_from_config(self, config: dict) -> str:
+        """
+        Select model variant based on resources and mode preference.
+        
+        Config schema (optional):
+            models:
+              speed: {id: "model-small", min_vram_gb: 0}
+              balanced: {id: "model-medium", min_vram_gb: 4}
+              accuracy: {id: "model-large", min_vram_gb: 8}
+            model: "fallback-model"  # Used if models not defined
+        """
+        models = config.get('models')
+        
+        if not models:
+            # Legacy config: single 'model' key
+            model = config.get('model')
+            if model is None:
+                raise ValueError(f"{self.tool_name}: No 'model' or 'models' found in config")
+            return model
+        
+        if self.mode == 'auto':
+            # Pick best that fits in available VRAM
+            vram = self.resources.gpu_vram_gb or 0
+            for tier in ['accuracy', 'balanced', 'speed']:
+                if tier in models:
+                    min_vram = models[tier].get('min_vram_gb', 0)
+                    if vram >= min_vram:
+                        logger.info(f"{self.tool_name}: Auto-selected '{tier}' model (VRAM: {vram:.1f}GB)")
+                        return models[tier]['id']
+            # Fallback to speed if nothing fits
+            return models.get('speed', {}).get('id', config.get('model'))
+        else:
+            # Use explicit mode preference
+            if self.mode in models:
+                logger.info(f"{self.tool_name}: Using '{self.mode}' model")
+                return models[self.mode]['id']
+            else:
+                fallback = models.get('balanced') or next(iter(models.values()))
+                logger.warning(f"{self.tool_name}: Mode '{self.mode}' not in config, using fallback")
+                return fallback['id']
 
     def _resolve_model_path(self, model_identifier: str) -> str:
         """
@@ -105,10 +238,14 @@ class BaseVisionTool(ABC):
         """
         raise NotImplementedError("This tool does not implement manual checkpoint download.")
 
+    # ------------------------------------------------------------------
+    # Lifecycle: load / unload
+    # ------------------------------------------------------------------
+
     def load_tool(self, config):
         """
-        Public method to load, verify, and warmup the model.
-        This is the common "init model" flow.
+        Public method to load and verify the model.
+        Does NOT warm up — call warmup() separately if needed.
         """
         if self.loaded:
             logger.info(f"{self.tool_name} is already loaded.")
@@ -125,13 +262,13 @@ class BaseVisionTool(ABC):
 
         try:
             self.model = self._load_model()
-            self._warmup()
-            self.loaded = True
-            logger.info(f"{self.tool_name} successfully loaded and warmed up on {self.device}.")
+            # Transition to BASE (pretrained) state
+            self._state = ToolState.BASE
+            logger.info(f"{self.tool_name} successfully loaded on {self.device}.")
             
         except Exception as e:
             self.model = None
-            self.loaded = False
+            self._state = ToolState.UNTRAINED
             logger.error(f"Failed to load {self.tool_name}. Error: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
             raise
@@ -146,8 +283,12 @@ class BaseVisionTool(ABC):
             if self.device == 'cuda':
                 torch.cuda.empty_cache()
         self.model = None
-        self.loaded = False
+        self._state = ToolState.UNTRAINED
         logger.info(f"{self.tool_name} unloaded and cleared from {self.device}.")
+
+    # ------------------------------------------------------------------
+    # Trigger logic
+    # ------------------------------------------------------------------
 
     def should_run(self, context: FrameContext) -> bool:
         """
@@ -172,10 +313,13 @@ class BaseVisionTool(ABC):
             
         return True
 
+    # ------------------------------------------------------------------
+    # Single-frame processing (existing interface)
+    # ------------------------------------------------------------------
+
     def process(self, frame_handle: ImageHandle, data: dict, context: FrameContext = None) -> dict:
         """
-        Public method to run the full inference pipeline.
-        This is the common "process frame" flow.
+        Public method to run the full inference pipeline on a single frame.
         """
         if not self.loaded:
             raise RuntimeError(f"ERROR: {self.tool_name} is not loaded. Call .load_tool() first.")
@@ -200,7 +344,86 @@ class BaseVisionTool(ABC):
         updated_data = {**data, **new_data}
 
         return updated_data, did_run
-    
+
+    # ------------------------------------------------------------------
+    # Batch processing (new VisionPilot interface)
+    # ------------------------------------------------------------------
+
+    def process_batch(self, frames: List[np.ndarray],
+                      contexts: List[FrameContext] = None) -> List[Dict[str, Any]]:
+        """
+        Process a batch of frames. Default implementation loops single-frame
+        processing. Subclasses can override for true batched inference.
+        
+        Args:
+            frames: List of raw numpy frames.
+            contexts: Optional list of FrameContext per frame.
+            
+        Returns:
+            List of result dicts, one per frame.
+        """
+        if not self.loaded:
+            raise RuntimeError(f"{self.tool_name} is not loaded.")
+        
+        if contexts is None:
+            contexts = [None] * len(frames)
+        
+        results = []
+        for frame, ctx in zip(frames, contexts):
+            data, _ = self.process(frame, {}, ctx)
+            results.append(data)
+        return results
+
+    # ------------------------------------------------------------------
+    # Training interface
+    # ------------------------------------------------------------------
+
+    async def train(self, dataset_ref: str, config: Optional[dict] = None) -> None:
+        """
+        Fine-tune the model on a user-provided dataset.
+        
+        Transitions state: current → TRAINING → TUNED (or rollback on failure).
+        
+        Args:
+            dataset_ref: Path or reference to the training dataset.
+            config: Training hyperparameters (epochs, lr, batch_size, etc.)
+        
+        Subclasses that support training must override _train_impl().
+        """
+        if config is None:
+            config = {}
+        
+        previous_state = self._state
+        
+        try:
+            self.state = ToolState.TRAINING
+            logger.info(f"{self.tool_name}: Starting training on {dataset_ref}")
+            
+            await self._train_impl(dataset_ref, config)
+            
+            self.state = ToolState.TUNED
+            logger.info(f"{self.tool_name}: Training complete. State → TUNED")
+            
+        except Exception as e:
+            logger.error(f"{self.tool_name}: Training failed: {e}")
+            # Rollback state
+            self._state = previous_state
+            raise
+
+    async def _train_impl(self, dataset_ref: str, config: dict) -> None:
+        """
+        Subclass implements the actual training logic.
+        Override this — not train() — to add training support.
+        """
+        raise NotImplementedError(
+            f"{self.tool_name} does not support training. "
+            "Override _train_impl() to add training support."
+        )
+
+    # ------------------------------------------------------------------
+    # Extrapolation
+    # ------------------------------------------------------------------
+
     def extrapolate_last(self, frame_handle: ImageHandle) -> Any:
         """
         Public method to return the last inference result with some extrapolation logic
@@ -214,24 +437,31 @@ class BaseVisionTool(ABC):
 
         return updated_data
 
+    # ------------------------------------------------------------------
+    # Abstract methods — subclasses must implement
+    # ------------------------------------------------------------------
+
     def _configure(self, config: dict):
         """Child implements tool-specific configuration logic."""
         pass
 
-    def _warmup(self):
+    def warmup(self, rounds: int = 4):
         """
-        Performs a dummy inference run to initialize the model on the device.
+        Performs dummy inference runs to initialize the model on the device.
         This helps avoid latency spikes during the first real inference.
+
+        Call this explicitly after load_tool() when you need warm caches.
+        VisionPipeline calls this automatically after constructing all tools.
         """
-        logger.info("Warming up model...")
+        logger.info(f"Warming up {self.tool_name} ({rounds} rounds)...")
         try:
-            for _ in range(4):
+            for _ in range(rounds):
                 dummy_image = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
                 inputs = self.preprocess(dummy_image)
                 _ = self.inference(inputs)
-            logger.info("Warmup complete.")
+            logger.info(f"{self.tool_name} warmup complete.")
         except Exception as e:
-            logger.warning(f"Model warmup failed: {e}")
+            logger.warning(f"{self.tool_name} warmup failed: {e}")
 
     def preprocess(self, frame: np.ndarray) -> Any:
         """Child implements frame-to-tensor logic (resize, normalize, to-device)."""

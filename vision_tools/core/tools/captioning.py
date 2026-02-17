@@ -16,6 +16,7 @@ from huggingface_hub import snapshot_download
 from .base_tool import BaseVisionTool, ToolKey
 from ...utils.image_utils import base64_encode
 from ...utils.types import ImageHandle, Any
+from ...utils.schemas import Caption, CaptionResult
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class Captioner(BaseVisionTool):
     """
     Captioning tool using SmolVLM2.
     """
+    OutputSchema = CaptionResult
+    InputSchema = None
+
     def __init__(self, model_id, config, device = 'cpu'):
         self.processor = None
         self.tokenizer = None
@@ -76,9 +80,9 @@ class Captioner(BaseVisionTool):
         return generated_texts
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
-        assitant_response = raw_output[0].split("Assistant:")[1].strip()
-        data = {"caption": assitant_response}
-        return data
+        assistant_response = raw_output[0].split("Assistant:")[1].strip()
+        caption = Caption(text=assistant_response, model_id=self.model_id)
+        return CaptionResult(caption=caption).model_dump()
     
     @property
     def output_keys(self) -> list:
@@ -101,8 +105,12 @@ class Captioner(BaseVisionTool):
 class LlamaCppCaptioner(BaseVisionTool):
     """
     Captioning tool using a local llama.cpp server.
+    Automatically scales GPU layers based on available VRAM.
     """
-    def __init__(self, model_id, config, device='cpu'):
+    OutputSchema = CaptionResult
+    InputSchema = None
+
+    def __init__(self, model_id, config, device=None):
         self.server_process = None
         self.port = None
         self.server_url = None
@@ -117,6 +125,22 @@ class LlamaCppCaptioner(BaseVisionTool):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('', 0))
             return s.getsockname()[1]
+
+    def _calculate_gpu_layers(self) -> int:
+        """Calculate optimal GPU layers based on available VRAM."""
+        if self.device != "cuda":
+            return 0
+        
+        vram_gb = self.resources.gpu_vram_gb or 0
+        # Rough heuristic: scale layers based on VRAM for VLMs (~0.5GB per layer)
+        if vram_gb >= 16:
+            return 100  # Full offload
+        elif vram_gb >= 8:
+            return 40
+        elif vram_gb >= 4:
+            return 20
+        else:
+            return 0  # CPU only
 
     def _load_model(self):
         model_path = self._resolve_model_path(self.model_id)
@@ -136,11 +160,13 @@ class LlamaCppCaptioner(BaseVisionTool):
              if not os.path.exists(server_path):
                  raise RuntimeError("llama-server executable not found. Please install llama.cpp or set LLAMA_SERVER_PATH.")
 
+        gpu_layers = self._calculate_gpu_layers()
+        
         cmd = [
             server_path,
             f"-{model_locator}", model_path,
             "--port", str(self.port),
-            "--n-gpu-layers", "100" if self.device == "cuda" else "0",
+            "--n-gpu-layers", str(gpu_layers),
             "-c", "8192",
             "--jinja"
         ]
@@ -214,7 +240,8 @@ class LlamaCppCaptioner(BaseVisionTool):
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
         content = raw_output.get("choices")[0].get("message").get("content")
-        return {"caption": content}
+        caption = Caption(text=content, model_id=self.model_id)
+        return CaptionResult(caption=caption).model_dump()
 
     @property
     def output_keys(self) -> list:

@@ -1,4 +1,14 @@
-model: "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF"
+models:
+  speed:
+    id: "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF"
+    min_vram_gb: 0
+  balanced:
+    id: "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
+    min_vram_gb: 4
+  accuracy:
+    id: "ggml-org/SmolVLM2-2.2B-Instruct-GGUF"
+    min_vram_gb: 8
+
 imgsz: 512
 trigger:
   type: "scene_change"

@@ -5,6 +5,7 @@ from ultralytics.engine.results import Keypoints
 from .base_tool import BaseVisionTool, ToolKey
 from ...utils.types import Any, List
 from ...utils.locations import APP_DIR
+from ...utils.schemas import Keypoint, PoseKeypoints, PoseResult
 
 DEFAULT_IMAGE_SIZE = 640
 DEFAULT_CONFIDENCE_THRESHOLD = 0.5
@@ -14,6 +15,9 @@ class PoseEstimator(BaseVisionTool):
     """
     Pose estimation tool using Ultralytics YOLO-Pose models.
     """
+    OutputSchema = PoseResult
+    InputSchema = None
+
     def __init__(self, model_id, config, device='cpu'):
         self.imgsz: int
         self.conf_threshold: float
@@ -47,25 +51,23 @@ class PoseEstimator(BaseVisionTool):
         return results[0]
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
-        """Parses Pose results."""
-        # raw_output is a Results object
+        """Parses Pose results into typed PoseKeypoints schemas."""
         keypoints = raw_output.keypoints
         
-        output_kpts = []
+        poses = []
         if keypoints is not None:
             for i, kpt in enumerate(keypoints):
-                # kpt.xy is (1, 17, 2) -> (17, 2)
                 xy = kpt.xy[0].cpu().numpy().tolist()
                 conf = kpt.conf[0].cpu().numpy().tolist() if kpt.conf is not None else [1.0]*17
                 
-                output_kpts.append({
-                    "id": i,
-                    "keypoints": list(zip(xy, conf)), # List of ([x, y], conf)
-                })
+                kpts = [
+                    Keypoint(x=pt[0], y=pt[1], confidence=c)
+                    for pt, c in zip(xy, conf)
+                ]
+                poses.append(PoseKeypoints(person_id=i, keypoints=kpts))
 
-        return {
-            "poses": output_kpts
-        }
+        result = PoseResult(poses=poses)
+        return result.model_dump()
     
     def extrapolate_last(self, frame_handle: Any) -> Any:
         results = self.postprocess(self.last_result, None)

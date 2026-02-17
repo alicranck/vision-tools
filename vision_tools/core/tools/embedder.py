@@ -11,12 +11,18 @@ from PIL import Image
 import numpy as np
 
 from .base_tool import BaseVisionTool, ToolKey
+from ...utils.schemas import Embedding, EmbeddingResult
+
+logger = logging.getLogger(__name__)
 
 
 class CLIPEmbedder(BaseVisionTool):
     """
     Tool for generating image embeddings using OpenAI's CLIP model.
     """
+    OutputSchema = EmbeddingResult
+    InputSchema = None
+
     def __init__(self, model_id: str, config: dict, device: str = 'cpu'):
         super().__init__(model_id, config, device)
 
@@ -40,8 +46,9 @@ class CLIPEmbedder(BaseVisionTool):
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
         features = raw_output / raw_output.norm(dim=-1, keepdim=True)
-        embedding = features.cpu().numpy()[0].tolist()
-        return {"embedding": embedding}
+        vector = features.cpu().numpy()[0].tolist()
+        emb = Embedding(vector=vector, model_id=self.model_id, dimension=len(vector))
+        return EmbeddingResult(embedding=emb).model_dump()
 
     def encode_text(self, text: str) -> List[float]:
         """
@@ -78,24 +85,73 @@ class CLIPEmbedder(BaseVisionTool):
 class SigLIP2Embedder(BaseVisionTool):
     """
     Tool for generating multimodal embeddings using google siglip2.
+    Automatically selects optimal backend (CUDA, OpenVINO, or PyTorch CPU).
     """
+    OutputSchema = EmbeddingResult
+    InputSchema = None
+
     def __init__(self, model_id: str = "google/siglip2-base-patch16-384",
-                        config: dict = None, device: str = 'cpu'):
+                        config: dict = None, device: str = None):
         if config is None:
             config = {}
         self.dummy_text = ["dummy"]
+        self._use_openvino = False
         super().__init__(model_id, config, device)
 
     def _load_model(self) -> Any:
         
         model_path = self._resolve_model_path(self.model_id)
-
-        model = AutoModel.from_pretrained(model_path).eval()
-        model.to(self.device)
+        
+        # Select backend based on hardware
+        if self.device == "cuda":
+            # GPU: Use native PyTorch with CUDA
+            model = AutoModel.from_pretrained(model_path).eval().to(self.device)
+            logger.info(f"{self.tool_name}: Using CUDA backend")
+        elif self._should_use_openvino():
+            # CPU with OpenVINO optimization
+            model = self._load_openvino_model(model_path)
+            self._use_openvino = True
+            self.dummy_image = Image.new("RGB", (384, 384))
+            logger.info(f"{self.tool_name}: Using OpenVINO backend")
+        else:
+            # Fallback: PyTorch CPU
+            model = AutoModel.from_pretrained(model_path).eval()
+            logger.info(f"{self.tool_name}: Using PyTorch CPU backend")
 
         self.processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
+        return model
+
+    def _should_use_openvino(self) -> bool:
+        """Check if OpenVINO should be used (available and on CPU)."""
+        if self.device == "cuda":
+            return False
+        try:
+            from optimum.intel.openvino import OVModelForZeroShotImageClassification
+            return True
+        except ImportError:
+            return False
+
+    def _load_openvino_model(self, model_path: str):
+        """Load or export model to OpenVINO format."""
+        from pathlib import Path
+        ov_model_path = Path(model_path) / "ov"
+
+        if ov_model_path.exists():
+            model = OVModelForZeroShotImageClassification.from_pretrained(
+                ov_model_path, device=self.device
+            )
+        else:
+            quant_config = OVWeightQuantizationConfig()
+            model = OVModelForZeroShotImageClassification.from_pretrained(
+                model_path, 
+                export=True, 
+                quantization_config=quant_config,
+                device=self.device
+            )
+            model.save_pretrained(ov_model_path)
+        
         return model
 
     def download_ckpt(self, model_id: str, destination: str) -> str:
@@ -106,31 +162,57 @@ class SigLIP2Embedder(BaseVisionTool):
         pil_image = Image.fromarray(frame)
         inputs = self.processor(images=[pil_image], text=self.dummy_text,
                                                          return_tensors="pt")
-        return inputs.to(self.device)
+        if self.device == "cuda":
+            return inputs.to(self.device)
+        return inputs
 
     def preprocess_text(self, text: str) -> Any:
-        tokens = self.tokenizer([text], padding="max_length",
-                    max_length=64, return_tensors="pt")
-        return tokens.to(self.device)
+        if self._use_openvino:
+            # OpenVINO requires dummy image for text encoding
+            inputs = self.processor(images=[self.dummy_image], text=[text],
+                                     max_length=64, padding="max_length", 
+                                     return_tensors="pt")
+            return inputs
+        else:
+            tokens = self.tokenizer([text], padding="max_length",
+                        max_length=64, return_tensors="pt")
+            if self.device == "cuda":
+                return tokens.to(self.device)
+            return tokens
 
     def inference(self, model_inputs: Any) -> Any:
-        with torch.no_grad():
-            embeddings = self.model.get_image_features(**model_inputs)
-        return embeddings
+        if self._use_openvino:
+            results = self.model(**model_inputs)
+            return results.image_embeds
+        else:
+            with torch.no_grad():
+                embeddings = self.model.get_image_features(**model_inputs)
+            return embeddings
 
     def postprocess(self, raw_output: Any, original_shape: tuple) -> dict:
-        embedding = raw_output.cpu().numpy().squeeze().tolist()
-        return {"embedding": embedding}
+        if isinstance(raw_output, torch.Tensor):
+            vector = raw_output.cpu().numpy().squeeze().tolist()
+        else:
+            vector = raw_output.squeeze().tolist()
+        emb = Embedding(vector=vector, model_id=self.model_id, dimension=len(vector))
+        return EmbeddingResult(embedding=emb).model_dump()
 
     def encode_text(self, text: str) -> List[float]:
         if not self.loaded:
             raise RuntimeError(f"ERROR: {self.tool_name} is not loaded. Call .load_tool() first.")
         
         text_input = self.preprocess_text(text)
-        with torch.no_grad():
-             raw_output = self.model.get_text_features(**text_input)
         
-        return raw_output.cpu().numpy().squeeze().tolist()
+        if self._use_openvino:
+            results = self.model(**text_input)
+            embedding = results.text_embeds
+            if isinstance(embedding, torch.Tensor):
+                embedding = embedding.cpu().numpy()
+            return embedding.squeeze().tolist()
+        else:
+            with torch.no_grad():
+                raw_output = self.model.get_text_features(**text_input)
+            return raw_output.cpu().numpy().squeeze().tolist()
 
     @property
     def output_keys(self) -> List[ToolKey]:
