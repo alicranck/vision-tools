@@ -204,7 +204,13 @@ class TestNodeCreation:
         config = NodeConfig(
             node_id="det1",
             node_type="object_detector",
-            config={"model": "yolo", "vocabulary": ["person"]}
+            config={
+                "task": "detection",
+                "model_family": "yolo",
+                "size": "small",
+                "device": "cpu",
+                "vocabulary": ["person"],
+            },
         )
         node = NodeRegistry.create(config)
         assert node.node_id == "det1"
@@ -250,7 +256,16 @@ class TestTaskNodeLifecycle:
 
     def test_detector_lifecycle(self):
         from vision_tools.nodes.detection import ObjectDetector
-        node = ObjectDetector("det", {"model": "yolo", "vocabulary": ["person"]})
+        node = ObjectDetector(
+            "det",
+            {
+                "task": "detection",
+                "model_family": "yolo",
+                "size": "small",
+                "device": "cpu",
+                "vocabulary": ["person"],
+            },
+        )
         assert node.state == NodeState.UNLOADED
 
         node.load()
@@ -318,9 +333,18 @@ class TestBackendRegistryIntegration:
 
     def test_detector_resolves_yolo(self):
         from vision_tools.nodes.detection import ObjectDetector
-        node = ObjectDetector("det", {"model": "yolo"})
+        node = ObjectDetector(
+            "det",
+            {
+                "task": "detection",
+                "model_family": "yolo",
+                "size": "small",
+                "device": "cpu",
+            },
+        )
         assert isinstance(node.backend, MockDetectionBackend)
-        assert node.backend.config.get("model") == "yolo"
+        assert node.backend.config.get("model_family") == "yolo"
+        assert node.backend.config.get("checkpoint_id")
 
     def test_embedder_resolves_siglip2(self):
         from vision_tools.nodes.embedding import Embedder
@@ -334,8 +358,16 @@ class TestBackendRegistryIntegration:
 
     def test_unknown_backend_raises(self):
         from vision_tools.nodes.detection import ObjectDetector
-        with pytest.raises(KeyError):
-            ObjectDetector("det", {"model": "nonexistent_model"})
+        with pytest.raises(ValueError):
+            ObjectDetector(
+                "det",
+                {
+                    "task": "detection",
+                    "model_family": "nonexistent_model",
+                    "size": "small",
+                    "device": "cpu",
+                },
+            )
 
 
 # ===================================================================
@@ -351,10 +383,15 @@ class TestLLMIntrospection:
         assert "description" in meta
         assert "output_schema" in meta
         assert "config_schema" in meta
+        assert "config_options" in meta
+        assert "model_catalog" in meta["config_options"]
 
     def test_config_schema_as_json(self):
         from vision_tools.nodes.detection import ObjectDetector
         schema = ObjectDetector.get_config_schema().model_json_schema()
-        assert "model" in schema["properties"]
+        assert "task" in schema["properties"]
+        assert "model_family" in schema["properties"]
+        assert "size" in schema["properties"]
+        assert "device" in schema["properties"]
         assert "vocabulary" in schema["properties"]
         assert "conf_threshold" in schema["properties"]

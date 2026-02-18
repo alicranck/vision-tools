@@ -39,7 +39,15 @@ Engine:
 # Core abstractions
 from vision_tools.core.node import Node, NodeState, NodeContext
 from vision_tools.core.registry import NodeRegistry
-from vision_tools.core.config import NodeConfig, PipelineConfig, ExecutionConfig
+from vision_tools.core.config import (
+    NodeConfig,
+    PipelineConfig,
+    ExecutionConfig,
+    ModelIntent,
+    ModelSize,
+    DeviceTarget,
+    InferenceTask,
+)
 
 # Pipeline
 from vision_tools.pipeline import Pipeline
@@ -59,6 +67,8 @@ from vision_tools.backends.registry import BackendRegistry
 # Runtime services
 from vision_tools.runtime.model_resolver import ModelResolver
 from vision_tools.runtime.model_cache import ModelCache
+from vision_tools.runtime.model_catalog import ModelCatalog, ResolvedModelSpec
+from vision_tools.capabilities import list_capabilities
 
 # Schemas (most commonly needed)
 from vision_tools.core.schemas import (

@@ -15,6 +15,7 @@ from vision_tools.nodes import pose
 from vision_tools.nodes import remote_node
 
 from vision_tools.backends.detection import yolo
+from vision_tools.backends.detection import rtdetr
 from vision_tools.backends.embedding import siglip2
 from vision_tools.backends.embedding import clip
 from vision_tools.backends.captioning import smolvlm
@@ -36,6 +37,7 @@ def register_all() -> None:
     NodeRegistry._categories["remote"] = "infrastructure"
 
     BackendRegistry._registry[("detection", "yolo")] = yolo.YoloBackend
+    BackendRegistry._registry[("detection", "rtdetr")] = rtdetr.RTDetrBackend
     BackendRegistry._registry[("embedding", "siglip2")] = siglip2.SigLIP2Backend
     BackendRegistry._registry[("embedding", "clip")] = clip.CLIPBackend
     BackendRegistry._registry[("captioning", "smolvlm")] = smolvlm.SmolVLMBackend

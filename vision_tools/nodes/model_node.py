@@ -95,11 +95,13 @@ class ModelNode(Node):
                 "Task node must resolve a backend before loading."
             )
 
-        # Resolve which model variant to use
+        # Resolve concrete checkpoint/model id.
+        # Preferred path: checkpoint_id resolved from a high-level model intent.
+        fallback_model_id = self.config.get("checkpoint_id") or self.config.get("model")
         model_id = self.model_resolver.resolve(
             variants=self.config.get("models", {}),
             mode=self.config.get("mode", "auto"),
-            fallback=self.config.get("model"),
+            fallback=fallback_model_id,
         )
 
         # Download if needed

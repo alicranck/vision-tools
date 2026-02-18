@@ -113,6 +113,15 @@ class Node(ABC):
         return None
 
     @classmethod
+    def get_config_options(cls) -> Optional[dict[str, Any]]:
+        """Return dynamic config options for app/LLM discovery.
+
+        Unlike ``get_config_schema()``, this can include runtime-registered
+        capabilities (for example available model families/sizes/devices).
+        """
+        return None
+
+    @classmethod
     def get_metadata(cls) -> dict[str, Any]:
         """Return introspection metadata for registry discovery.
 
@@ -133,6 +142,7 @@ class Node(ABC):
                 cls.get_config_schema().model_json_schema()
                 if cls.get_config_schema() else None
             ),
+            "config_options": cls.get_config_options(),
         }
 
     def __repr__(self) -> str:

@@ -12,7 +12,13 @@ Example pipeline config (JSON)::
             {
                 "node_id": "detector",
                 "node_type": "object_detector",
-                "config": {"model": "yolo", "runtime": "openvino", "vocabulary": ["person", "food"]}
+                "config": {
+                    "task": "detection",
+                    "model_family": "yolo",
+                    "size": "small",
+                    "device": "cpu",
+                    "vocabulary": ["person", "food"]
+                }
             },
             {
                 "node_id": "captioner",
@@ -26,6 +32,7 @@ Example pipeline config (JSON)::
 """
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -50,6 +57,43 @@ class NodeConfig(BaseModel):
         default_factory=list,
         description="Node IDs whose outputs feed into this node",
     )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InferenceTask(str, Enum):
+    """High-level inference task selected by the app/LLM."""
+    DETECTION = "detection"
+    OPEN_VOCAB_DETECTION = "open_vocab_detection"
+    EMBEDDING = "embedding"
+    CAPTIONING = "captioning"
+    POSE = "pose"
+
+
+class ModelSize(str, Enum):
+    """Canonical model size tiers exposed to the app."""
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+
+
+class DeviceTarget(str, Enum):
+    """Execution target selected by the app/LLM."""
+    AUTO = "auto"
+    CPU = "cpu"
+    GPU = "gpu"
+
+
+class ModelIntent(BaseModel):
+    """High-level model selection contract for app -> vision-tools.
+
+    The app chooses task/family/size/device; vision-tools resolves concrete
+    checkpoint/runtime internally.
+    """
+    task: InferenceTask
+    model_family: str = Field(..., description="Model family (e.g. 'yolo', 'rtdetr').")
+    size: ModelSize = Field(ModelSize.SMALL)
+    device: DeviceTarget = Field(DeviceTarget.AUTO)
 
     model_config = ConfigDict(extra="forbid")
 

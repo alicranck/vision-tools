@@ -10,7 +10,9 @@ Usage::
         name="my_pipeline",
         nodes=[
             NodeConfig(node_id="det", node_type="object_detector",
-                       config={"model": "yolo", "vocabulary": ["person"]}),
+                       config={"task": "detection", "model_family": "yolo",
+                               "size": "small", "device": "cpu",
+                               "vocabulary": ["person"]}),
             NodeConfig(node_id="emb", node_type="embedder",
                        config={"model": "siglip2"}, depends_on=["det"]),
         ],
