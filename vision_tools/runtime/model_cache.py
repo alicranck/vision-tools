@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Default cache directory
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "vision_tools" / "models"
+_CACHE_ENV_VAR = "VISION_TOOLS_MODEL_CACHE_DIR"
 
 
 class ModelCache:
@@ -29,7 +30,9 @@ class ModelCache:
     """
 
     def __init__(self, cache_dir: Path | str | None = None) -> None:
-        self.cache_dir = Path(cache_dir) if cache_dir else _DEFAULT_CACHE_DIR
+        env_cache_dir = os.getenv(_CACHE_ENV_VAR)
+        selected = cache_dir or env_cache_dir or _DEFAULT_CACHE_DIR
+        self.cache_dir = Path(selected).expanduser()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def get_or_download(

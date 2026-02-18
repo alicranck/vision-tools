@@ -398,3 +398,9 @@ class TestModelCache:
             assert len(list(Path(tmpdir).iterdir())) == 1
             cache.clear()
             assert len(list(Path(tmpdir).iterdir())) == 0
+
+    def test_env_cache_dir_used_when_no_constructor_override(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.setenv("VISION_TOOLS_MODEL_CACHE_DIR", tmpdir)
+            cache = ModelCache()
+            assert cache.cache_dir == Path(tmpdir)
