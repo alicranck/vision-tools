@@ -34,6 +34,14 @@ from vision_tools.pipeline.executor import PipelineExecutor
 
 logger = logging.getLogger(__name__)
 
+# Ensure all nodes and backends are registered when Pipeline is used.
+# This import triggers @NodeRegistry.register and @BackendRegistry.register
+# decorators, making the pipeline usable from clean process state.
+try:
+    import vision_tools.nodes  # noqa: F401
+except ImportError:
+    logger.debug("Pipeline: nodes package not available for auto-registration.")
+
 
 class Pipeline:
     """High-level pipeline facade.
@@ -79,7 +87,14 @@ class Pipeline:
             self.warmup(self._execution.warmup_rounds)
 
         if self._execution.verify_on_init:
-            self.verify()
+            if not self.verify():
+                failed = [
+                    nid for nid, n in self._nodes.items()
+                    if hasattr(n, 'state') and n.state != NodeState.READY
+                ]
+                raise RuntimeError(
+                    f"Pipeline verification failed for nodes: {failed}"
+                )
 
     def warmup(self, rounds: int = 4) -> None:
         """Warm up all nodes."""

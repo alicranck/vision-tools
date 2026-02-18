@@ -257,4 +257,4 @@ class TestTopLevelImports:
 
     def test_version(self):
         import vision_tools
-        assert vision_tools.__version__ == "2.0.0"
+        assert vision_tools.__version__ == "0.1.0"

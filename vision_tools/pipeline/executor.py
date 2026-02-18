@@ -125,23 +125,19 @@ class PipelineExecutor:
 
         if deps:
             upstream = {dep: results[dep] for dep in deps if dep in results}
-            context = NodeContext(
-                frame_idx=context.frame_idx,
-                timestamp=context.timestamp,
-                frame_shape=context.frame_shape,
-                upstream_results=upstream,
-            )
+            # Preserve ALL context fields — only update upstream_results
+            context = context.model_copy(update={
+                "upstream_results": upstream,
+            })
 
             # For nodes with dependencies, pass upstream output as input data
             # Single dependency: pass its output directly
-            # Multiple dependencies: pass merged dict
+            # Multiple dependencies: pass namespaced dict {dep_id: result}
             if len(upstream) == 1:
                 input_data = next(iter(upstream.values()))
             elif len(upstream) > 1:
-                input_data = {}
-                for dep_result in upstream.values():
-                    if isinstance(dep_result, dict):
-                        input_data.update(dep_result)
+                input_data = upstream  # namespaced, no silent key overwrite
 
         output = node.process(input_data, context)
         results[node_id] = output
+

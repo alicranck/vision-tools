@@ -96,8 +96,10 @@ def clean_registries():
     # Save and clear
     saved_backends = dict(BackendRegistry._registry)
     saved_nodes = dict(NodeRegistry._registry)
+    saved_categories = dict(NodeRegistry._categories)
     BackendRegistry.clear()
     NodeRegistry._registry.clear()
+    NodeRegistry._categories.clear()
 
     # Register mock backends
     BackendRegistry._registry[("detection", "yolo")] = MockDetectionBackend
@@ -116,20 +118,26 @@ def clean_registries():
     # Re-register if cleared
     if "object_detector" not in NodeRegistry._registry:
         NodeRegistry._registry["object_detector"] = ObjectDetector
+        NodeRegistry._categories["object_detector"] = "detection"
     if "embedder" not in NodeRegistry._registry:
         NodeRegistry._registry["embedder"] = Embedder
+        NodeRegistry._categories["embedder"] = "embedding"
     if "captioner" not in NodeRegistry._registry:
         NodeRegistry._registry["captioner"] = Captioner
+        NodeRegistry._categories["captioner"] = "captioning"
     if "pose_estimator" not in NodeRegistry._registry:
         NodeRegistry._registry["pose_estimator"] = PoseEstimator
+        NodeRegistry._categories["pose_estimator"] = "pose"
 
     yield
 
-    # Restore
+    # Restore both _registry and _categories
     BackendRegistry._registry.clear()
     BackendRegistry._registry.update(saved_backends)
     NodeRegistry._registry.clear()
     NodeRegistry._registry.update(saved_nodes)
+    NodeRegistry._categories.clear()
+    NodeRegistry._categories.update(saved_categories)
 
 
 # ===================================================================

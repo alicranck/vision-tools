@@ -45,8 +45,11 @@ class SmolVLMBackend:
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
         """Extract caption text from generated output."""
-        assistant_response = raw_output[0].split("Assistant:")[1].strip()
-        caption = Caption(text=assistant_response, model_id=self._model_id)
+        text = raw_output[0] if raw_output else ""
+        # Guard against missing 'Assistant:' delimiter
+        if "Assistant:" in text:
+            text = text.split("Assistant:", 1)[1].strip()
+        caption = Caption(text=text, model_id=self._model_id)
         return CaptionResult(caption=caption).model_dump()
 
     def preprocess_frame(self, frame: np.ndarray, device: str = "cpu") -> Any:
