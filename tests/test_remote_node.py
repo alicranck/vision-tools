@@ -169,5 +169,7 @@ class TestRemoteNodeConfig:
         assert "timeout" in schema["properties"]
 
     def test_registry_registered(self):
+        # Ensure module is imported to trigger registration
+        from vision_tools.nodes.remote_node import RemoteNode
         from vision_tools.core.registry import NodeRegistry
         assert NodeRegistry.get("remote") is RemoteNode

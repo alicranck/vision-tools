@@ -64,10 +64,10 @@ class CLIPBackend:
         result = self.postprocess(raw, NodeContext())
         return result["embedding"]["vector"]
 
-    def preprocess_image(self, frame: np.ndarray) -> Any:
+    def preprocess(self, inputs: np.ndarray) -> Any:
         """Preprocess image for CLIP."""
         from PIL import Image
-        pil_image = Image.fromarray(frame)
+        pil_image = Image.fromarray(inputs)
         return self._preprocess_fn(pil_image).unsqueeze(0).to(self._device)
 
     def get_available_runtimes(self) -> list[str]:

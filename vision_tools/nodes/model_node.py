@@ -196,6 +196,13 @@ class ModelNode(Node):
             )
 
         inputs = self.preprocess(data, context)
+
+        # Optional: Backend-specific preprocessing
+        # Some backends (CLIP, SigLIP, VLM) need to convert raw frames to
+        # tensors or API payloads before inference.
+        if hasattr(self.backend, "preprocess"):
+            inputs = self.backend.preprocess(inputs)
+
         raw_output = self.backend.infer(self.model, inputs)
         result = self.backend.postprocess(raw_output, context)
 

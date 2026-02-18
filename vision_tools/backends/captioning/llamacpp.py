@@ -95,16 +95,16 @@ class LlamaCppBackend:
         caption = Caption(text=content, model_id=self._model_id)
         return CaptionResult(caption=caption).model_dump()
 
-    def preprocess_frame(self, frame: np.ndarray, device: str = "cpu") -> dict:
+    def preprocess(self, inputs: np.ndarray) -> dict:
         """Prepare frame as chat completion payload."""
         from vision_tools.utils.image_utils import base64_encode
 
-        h, w = frame.shape[:2]
+        h, w = inputs.shape[:2]
         if max(h, w) > self._imgsz:
             scale = self._imgsz / max(h, w)
-            frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+            inputs = cv2.resize(inputs, (int(w * scale), int(h * scale)))
 
-        base64_image = base64_encode(frame, "jpeg")
+        base64_image = base64_encode(inputs, "jpeg")
         return {
             "messages": [{
                 "role": "user",

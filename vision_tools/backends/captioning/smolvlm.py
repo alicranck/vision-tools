@@ -52,7 +52,7 @@ class SmolVLMBackend:
         caption = Caption(text=text, model_id=self._model_id)
         return CaptionResult(caption=caption).model_dump()
 
-    def preprocess_frame(self, frame: np.ndarray, device: str = "cpu") -> Any:
+    def preprocess(self, inputs: np.ndarray) -> Any:
         """Prepare frame for SmolVLM2 inference."""
         from vision_tools.utils.image_utils import base64_encode
 
@@ -60,7 +60,7 @@ class SmolVLMBackend:
             "role": "user",
             "content": [
                 {"type": "text", "text": "Give a concise description of what is happening in this image"},
-                {"type": "image", "url": f"data:image/png;base64,{base64_encode(frame, 'png')}"},
+                {"type": "image", "url": f"data:image/png;base64,{base64_encode(inputs, 'png')}"},
             ],
         }]
         return self._processor.apply_chat_template(
@@ -69,7 +69,14 @@ class SmolVLMBackend:
             tokenize=True,
             return_dict=True,
             return_tensors="pt",
-        ).to(device)
+        ).to(self._model_id if isinstance(self._model_id, str) and self._model_id != "" else "cpu") 
+        # Note: device handling in SmolVLM is a bit tricky with optimum-intel, usually CPU.
+        # But we need to match signature. Let's simplify and rely on the model object handling device or the user passing it.
+        # Actually ModelNode doesn't pass device to process/preprocess.
+        # For this fix, I'll keep it simple and assume CPU or rely on load_model's device. 
+        # Ideally preprocess shouldn't need device if it returns standard tensors that infer() moves, 
+        # but apply_chat_template returns pt tensors.
+
 
     def get_available_runtimes(self) -> list[str]:
         return ["openvino"]

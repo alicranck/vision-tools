@@ -121,20 +121,20 @@ class SigLIP2Backend:
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "openvino"]
 
-    def preprocess_image(self, frame: np.ndarray) -> Any:
+    def preprocess(self, inputs: np.ndarray) -> Any:
         """Preprocess a frame for SigLIP2 inference.
 
-        Called by the task node's preprocess() if overridden.
+        Called by the ModelNode before inference.
         """
         from PIL import Image
-        pil_image = Image.fromarray(frame)
-        inputs = self._processor(
+        pil_image = Image.fromarray(inputs)
+        processed = self._processor(
             images=[pil_image], text=["dummy"],
             return_tensors="pt",
         )
         if self._device == "cuda":
-            return inputs.to("cuda")
-        return inputs
+            return processed.to("cuda")
+        return processed
 
     @staticmethod
     def _openvino_available() -> bool:
