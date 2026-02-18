@@ -75,6 +75,15 @@ class BackendRegistry:
         """
         key = (task, model)
         if key not in cls._registry:
+            # Lazy bootstrap: supports test suites or callers that clear registries.
+            try:
+                import vision_tools.nodes as nodes_pkg  # noqa: F401
+                if hasattr(nodes_pkg, "register_all"):
+                    nodes_pkg.register_all()
+            except Exception:
+                pass
+
+        if key not in cls._registry:
             available = sorted(
                 f"{t}:{m}" for t, m in cls._registry.keys()
             )

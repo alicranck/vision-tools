@@ -25,6 +25,7 @@ class SmolVLMBackend:
         self._processor = None
         self._tokenizer = None
         self._model_id = ""
+        self._device = "cpu"
 
     def load_model(self, model_path: str, device: str = "auto") -> Any:
         """Load SmolVLM2 model via optimum-intel."""
@@ -32,6 +33,7 @@ class SmolVLMBackend:
         from optimum.intel.openvino.modeling_visual_language import OVModelForVisualCausalLM
 
         self._model_id = model_path
+        self._device = "cpu" if device in ("auto", "openvino", "ov") else device
         model = OVModelForVisualCausalLM.from_pretrained(model_path)
         self._processor = AutoProcessor.from_pretrained(model_path)
         self._tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -63,19 +65,16 @@ class SmolVLMBackend:
                 {"type": "image", "url": f"data:image/png;base64,{base64_encode(inputs, 'png')}"},
             ],
         }]
-        return self._processor.apply_chat_template(
+        tensors = self._processor.apply_chat_template(
             messages,
             add_generation_prompt=True,
             tokenize=True,
             return_dict=True,
             return_tensors="pt",
-        ).to(self._model_id if isinstance(self._model_id, str) and self._model_id != "" else "cpu") 
-        # Note: device handling in SmolVLM is a bit tricky with optimum-intel, usually CPU.
-        # But we need to match signature. Let's simplify and rely on the model object handling device or the user passing it.
-        # Actually ModelNode doesn't pass device to process/preprocess.
-        # For this fix, I'll keep it simple and assume CPU or rely on load_model's device. 
-        # Ideally preprocess shouldn't need device if it returns standard tensors that infer() moves, 
-        # but apply_chat_template returns pt tensors.
+        )
+        if hasattr(tensors, "to"):
+            return tensors.to(self._device)
+        return tensors
 
 
     def get_available_runtimes(self) -> list[str]:

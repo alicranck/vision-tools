@@ -173,3 +173,11 @@ class TestRemoteNodeConfig:
         from vision_tools.nodes.remote_node import RemoteNode
         from vision_tools.core.registry import NodeRegistry
         assert NodeRegistry.get("remote") is RemoteNode
+
+    def test_registry_recovers_after_clear(self):
+        """Built-in bootstrap should restore remote node after registry clear."""
+        from vision_tools.nodes.remote_node import RemoteNode
+        from vision_tools.core.registry import NodeRegistry
+
+        NodeRegistry.clear()
+        assert NodeRegistry.get("remote") is RemoteNode
