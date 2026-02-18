@@ -17,7 +17,7 @@ from vision_tools.core.registry import NodeRegistry
 from vision_tools.core.schemas import DetectionResult, BoundingBox, EmbeddingResult, Embedding
 from vision_tools.pipeline import Pipeline
 from vision_tools.pipeline.graph import DAG, CycleError
-from vision_tools.pipeline.validator import SchemaValidator
+from vision_tools.pipeline.validator import SchemaValidator, SchemaValidationError
 from vision_tools.pipeline.executor import PipelineExecutor
 
 
@@ -207,7 +207,7 @@ class TestSchemaValidator:
         warnings = SchemaValidator.validate(dag, nodes)
         assert len(warnings) == 0
 
-    def test_missing_output_schema_warning(self, chain_config):
+    def test_missing_output_schema_raises(self, chain_config):
         dag = DAG(chain_config)
 
         class NoOutputNode(Node):
@@ -223,8 +223,8 @@ class TestSchemaValidator:
             def process(self, data, ctx): return {}
 
         nodes = {"det": NoOutputNode(), "emb": NeedsInputNode()}
-        warnings = SchemaValidator.validate(dag, nodes)
-        assert len(warnings) >= 1
+        with pytest.raises(SchemaValidationError, match="Schema validation failed"):
+            SchemaValidator.validate(dag, nodes)
 
 
 # ===================================================================

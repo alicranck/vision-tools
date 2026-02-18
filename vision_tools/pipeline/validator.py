@@ -7,7 +7,8 @@ OutputSchemas of its dependencies.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from types import NoneType
+from typing import Any, get_args, get_origin
 
 from vision_tools.core.node import Node
 from vision_tools.pipeline.graph import DAG
@@ -42,7 +43,7 @@ class SchemaValidator:
         Raises:
             SchemaValidationError: If a hard incompatibility is detected.
         """
-        warnings_list: list[str] = []
+        errors: list[str] = []
 
         for node_id, node in nodes.items():
             input_schema = node.InputSchema
@@ -54,31 +55,114 @@ class SchemaValidator:
             if not deps:
                 continue  # Root node, takes pipeline input
 
-            upstream_fields: set[str] = set()
+            upstream_fields: dict[str, list[Any]] = {}
             for dep_id in deps:
                 dep_node = nodes.get(dep_id)
                 if dep_node is None:
                     continue
                 output_schema = dep_node.OutputSchema
                 if output_schema is None:
-                    warnings_list.append(
+                    errors.append(
                         f"Node '{dep_id}' has no OutputSchema; "
                         f"cannot validate input for '{node_id}'"
                     )
                     continue
-                upstream_fields.update(output_schema.model_fields.keys())
+                for field_name, field_info in output_schema.model_fields.items():
+                    upstream_fields.setdefault(field_name, []).append(field_info.annotation)
 
-            # Check required input fields are present in upstream outputs
-            required_fields = set(input_schema.model_fields.keys())
-            missing = required_fields - upstream_fields
-            if missing:
-                warnings_list.append(
-                    f"Node '{node_id}' requires fields {missing} "
-                    f"not found in upstream outputs {upstream_fields}"
-                )
+            # Check required input fields are present and type-compatible
+            for field_name, field_info in input_schema.model_fields.items():
+                if not field_info.is_required():
+                    continue
 
-        if warnings_list:
-            for w in warnings_list:
-                logger.warning(f"SchemaValidator: {w}")
+                if field_name not in upstream_fields:
+                    errors.append(
+                        f"Node '{node_id}' requires field '{field_name}' "
+                        f"not found in upstream outputs {set(upstream_fields.keys())}"
+                    )
+                    continue
 
-        return warnings_list
+                expected = field_info.annotation
+                provided = upstream_fields[field_name]
+                if not any(
+                    SchemaValidator._is_type_compatible(src, expected)
+                    for src in provided
+                ):
+                    errors.append(
+                        f"Node '{node_id}' field '{field_name}' type mismatch: "
+                        f"expected {expected!r}, upstream provides {provided!r}"
+                    )
+
+        if errors:
+            for err in errors:
+                logger.error(f"SchemaValidator: {err}")
+            raise SchemaValidationError(
+                "Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            )
+
+        return []
+
+    @staticmethod
+    def _is_type_compatible(source: Any, target: Any) -> bool:
+        """Best-effort type compatibility check for schema field annotations."""
+        if target is Any or source is Any:
+            return True
+        if source == target:
+            return True
+
+        source_origin = get_origin(source)
+        target_origin = get_origin(target)
+        source_args = get_args(source)
+        target_args = get_args(target)
+
+        # Handle unions (including Optional[T]).
+        if source_origin is None and target_origin is None:
+            try:
+                return issubclass(source, target)
+            except Exception:
+                return False
+
+        if source_origin in (NoneType,):
+            return target_origin in (NoneType,)
+
+        if target_origin is None and target is NoneType:
+            return source is NoneType
+
+        if source_origin in (tuple, list, dict, set) and target_origin in (tuple, list, dict, set):
+            if source_origin != target_origin:
+                return False
+            if not target_args:
+                return True
+            if len(source_args) != len(target_args):
+                return False
+            return all(
+                SchemaValidator._is_type_compatible(s_arg, t_arg)
+                for s_arg, t_arg in zip(source_args, target_args)
+            )
+
+        # Generic unions: source is compatible if any branch fits target.
+        if source_origin is not None and str(source_origin).endswith("UnionType") or source_origin is getattr(__import__("typing"), "Union", object):
+            return any(
+                SchemaValidator._is_type_compatible(s_arg, target)
+                for s_arg in source_args
+            )
+        if target_origin is not None and str(target_origin).endswith("UnionType") or target_origin is getattr(__import__("typing"), "Union", object):
+            return any(
+                SchemaValidator._is_type_compatible(source, t_arg)
+                for t_arg in target_args
+            )
+
+        # Matching generic origins with arguments (e.g., list[int] -> list[float]).
+        if source_origin is not None and target_origin is not None:
+            if source_origin != target_origin:
+                return False
+            if not target_args:
+                return True
+            if len(source_args) != len(target_args):
+                return False
+            return all(
+                SchemaValidator._is_type_compatible(s_arg, t_arg)
+                for s_arg, t_arg in zip(source_args, target_args)
+            )
+
+        return False

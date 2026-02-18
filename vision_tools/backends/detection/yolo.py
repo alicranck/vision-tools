@@ -32,6 +32,17 @@ class YoloBackend:
         self._tracker = None
         self._kalman_filters: dict = {}
         self._tracking_history: dict = defaultdict(list)
+        self._imgsz = 640
+        self._conf_threshold = 0.25
+        self._vocabulary: list[str] = []
+        self._prompt_free = False
+
+    def configure(self, config: dict[str, Any]) -> None:
+        """Apply task-level config from ObjectDetector node."""
+        self._imgsz = int(config.get("imgsz", self._imgsz))
+        self._conf_threshold = float(config.get("conf_threshold", self._conf_threshold))
+        self._vocabulary = list(config.get("vocabulary", self._vocabulary) or [])
+        self._prompt_free = bool(config.get("prompt_free", self._prompt_free))
 
     def load_model(self, model_path: str, device: str = "auto") -> Any:
         """Load YOLO model and set up tracker.
@@ -44,6 +55,11 @@ class YoloBackend:
         from trackers import SORTTracker
 
         model = YOLOE(model_path)
+
+        if not self._prompt_free and self._vocabulary:
+            if hasattr(model, "get_text_pe") and hasattr(model, "set_classes"):
+                pos_embeddings = model.get_text_pe(self._vocabulary)
+                model.set_classes(self._vocabulary, pos_embeddings)
 
         # Select runtime
         if device in ("openvino", "ov"):
@@ -73,10 +89,11 @@ class YoloBackend:
         import supervision as sv
         from vision_tools.utils.tracking import BoxKalmanFilter
 
-        conf = 0.25  # default, can be overridden through config
-        imgsz = 640
-
-        results = model.predict(inputs, conf=conf, imgsz=imgsz)
+        results = model.predict(
+            inputs,
+            conf=self._conf_threshold,
+            imgsz=self._imgsz,
+        )
         detections = sv.Detections.from_ultralytics(results[0])
         detections = self._tracker.update(detections)
 

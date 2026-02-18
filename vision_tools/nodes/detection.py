@@ -52,6 +52,8 @@ class ObjectDetector(ModelNode):
         model_name = config.get("model", "yolo")
         if "backend" not in kwargs:
             kwargs["backend"] = BackendRegistry.get(task="detection", model=model_name)
+        if hasattr(kwargs["backend"], "configure"):
+            kwargs["backend"].configure(config)
         super().__init__(node_id=node_id, config=config, **kwargs)
 
     @classmethod

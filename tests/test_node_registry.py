@@ -30,6 +30,12 @@ from vision_tools.core.schemas import (
 # ===================================================================
 
 class MockDetectionBackend:
+    def __init__(self):
+        self.config = {}
+
+    def configure(self, config):
+        self.config = dict(config)
+
     def load_model(self, model_path, device="auto"):
         return {"mock": True}
     def infer(self, model, inputs):
@@ -314,6 +320,7 @@ class TestBackendRegistryIntegration:
         from vision_tools.nodes.detection import ObjectDetector
         node = ObjectDetector("det", {"model": "yolo"})
         assert isinstance(node.backend, MockDetectionBackend)
+        assert node.backend.config.get("model") == "yolo"
 
     def test_embedder_resolves_siglip2(self):
         from vision_tools.nodes.embedding import Embedder
