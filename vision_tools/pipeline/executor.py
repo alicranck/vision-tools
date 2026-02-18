@@ -121,6 +121,8 @@ class PipelineExecutor:
 
         # Inject upstream results into context
         deps = self.dag.dependencies(node_id)
+        input_data = frame  # default: raw frame
+
         if deps:
             upstream = {dep: results[dep] for dep in deps if dep in results}
             context = NodeContext(
@@ -130,5 +132,16 @@ class PipelineExecutor:
                 upstream_results=upstream,
             )
 
-        output = node.process(frame, context)
+            # For nodes with dependencies, pass upstream output as input data
+            # Single dependency: pass its output directly
+            # Multiple dependencies: pass merged dict
+            if len(upstream) == 1:
+                input_data = next(iter(upstream.values()))
+            elif len(upstream) > 1:
+                input_data = {}
+                for dep_result in upstream.values():
+                    if isinstance(dep_result, dict):
+                        input_data.update(dep_result)
+
+        output = node.process(input_data, context)
         results[node_id] = output

@@ -12,12 +12,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 from ..core.tools.base_tool import BaseVisionTool
 from ..utils.schemas import ToolState
 from .config import TrainConfig
 from .dataset import VisionDataset
+
+# Support new ModelNode if available
+try:
+    from ..nodes.model_node import ModelNode
+except ImportError:
+    ModelNode = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 

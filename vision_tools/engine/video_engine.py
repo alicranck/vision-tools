@@ -15,6 +15,12 @@ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 import numpy as np
 
+# Support both old VisionPipeline and new Pipeline
+try:
+    from ..pipeline import Pipeline as NewPipeline
+except ImportError:
+    NewPipeline = None
+
 from ..core.tools.pipeline import VisionPipeline
 from ..utils.schemas import BatchPayload, FrameMetadata, FrameResult
 from ..utils.types import FrameContext
