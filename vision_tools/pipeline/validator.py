@@ -7,8 +7,8 @@ OutputSchemas of its dependencies.
 from __future__ import annotations
 
 import logging
-from types import NoneType
-from typing import Any, get_args, get_origin
+from types import NoneType, UnionType
+from typing import Any, Union, get_args, get_origin
 
 from vision_tools.core.node import Node
 from vision_tools.pipeline.graph import DAG
@@ -114,19 +114,28 @@ class SchemaValidator:
         target_origin = get_origin(target)
         source_args = get_args(source)
         target_args = get_args(target)
+        union_origins = (Union, UnionType)
 
-        # Handle unions (including Optional[T]).
+        # Union handling (including Optional[T]).
+        if target_origin in union_origins:
+            return any(
+                SchemaValidator._is_type_compatible(source, t_arg)
+                for t_arg in target_args
+            )
+        if source_origin in union_origins:
+            return all(
+                SchemaValidator._is_type_compatible(s_arg, target)
+                for s_arg in source_args
+            )
+
         if source_origin is None and target_origin is None:
             try:
                 return issubclass(source, target)
             except Exception:
                 return False
 
-        if source_origin in (NoneType,):
-            return target_origin in (NoneType,)
-
-        if target_origin is None and target is NoneType:
-            return source is NoneType
+        if source is NoneType or target is NoneType:
+            return source is target
 
         if source_origin in (tuple, list, dict, set) and target_origin in (tuple, list, dict, set):
             if source_origin != target_origin:
@@ -138,18 +147,6 @@ class SchemaValidator:
             return all(
                 SchemaValidator._is_type_compatible(s_arg, t_arg)
                 for s_arg, t_arg in zip(source_args, target_args)
-            )
-
-        # Generic unions: source is compatible if any branch fits target.
-        if source_origin is not None and str(source_origin).endswith("UnionType") or source_origin is getattr(__import__("typing"), "Union", object):
-            return any(
-                SchemaValidator._is_type_compatible(s_arg, target)
-                for s_arg in source_args
-            )
-        if target_origin is not None and str(target_origin).endswith("UnionType") or target_origin is getattr(__import__("typing"), "Union", object):
-            return any(
-                SchemaValidator._is_type_compatible(source, t_arg)
-                for t_arg in target_args
             )
 
         # Matching generic origins with arguments (e.g., list[int] -> list[float]).

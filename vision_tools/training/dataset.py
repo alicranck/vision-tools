@@ -198,7 +198,7 @@ class VisionDataset:
         if self.num_images == 0:
             errors.append("Dataset contains no images")
         
-        if tool_type in ('ov_detection', 'pose_estimation'):
+        if tool_type in ('ov_detection', 'pose_estimation', 'object_detector', 'pose_estimator'):
             if self.format not in (DatasetFormat.YOLO, DatasetFormat.COCO):
                 errors.append(f"Detection/pose tools require YOLO or COCO format, got {self.format}")
         

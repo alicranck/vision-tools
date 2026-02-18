@@ -9,13 +9,9 @@ Handles:
 """
 from __future__ import annotations
 
-import asyncio
 import logging
-from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional
 
-from ..core.tools.base_tool import BaseVisionTool
-from ..utils.schemas import ToolState
 from .config import TrainConfig
 from .dataset import VisionDataset
 
@@ -35,7 +31,7 @@ class TrainingError(Exception):
 
 class ToolTrainer:
     """
-    Orchestrates the training lifecycle for vision tools.
+    Orchestrates the training lifecycle for tools/nodes.
     
     Validates dataset compatibility, manages state transitions,
     and delegates actual training to the tool's _train_impl().
@@ -47,11 +43,11 @@ class ToolTrainer:
         await trainer.train(dataset, config)
     """
 
-    def __init__(self, tool: BaseVisionTool,
+    def __init__(self, tool: Any,
                  on_progress: Optional[Callable[[Dict[str, Any]], None]] = None):
         """
         Args:
-            tool: The vision tool to train
+            tool: Trainable object exposing ``train(dataset_ref, config)``.
             on_progress: Optional callback called with progress updates
         """
         self.tool = tool
@@ -63,9 +59,24 @@ class ToolTrainer:
         if self.on_progress:
             self.on_progress({
                 'event': event,
-                'tool': self.tool.tool_name,
+                'tool': self._tool_label(),
                 **kwargs,
             })
+
+    def _tool_label(self) -> str:
+        """Best-effort tool/node identifier for logs and progress."""
+        if hasattr(self.tool, "tool_name"):
+            return str(self.tool.tool_name)
+        if hasattr(self.tool, "node_id"):
+            return str(self.tool.node_id)
+        return self.tool.__class__.__name__
+
+    def _tool_state_value(self) -> str:
+        """Return current state value regardless of enum/string flavor."""
+        state = getattr(self.tool, "state", None)
+        if state is None:
+            return "unknown"
+        return getattr(state, "value", str(state))
 
     async def train(self, dataset: VisionDataset, config: TrainConfig) -> None:
         """
@@ -90,7 +101,7 @@ class ToolTrainer:
         errors = dataset.validate_for_tool(tool_type)
         if errors:
             raise TrainingError(
-                f"Dataset validation failed for {self.tool.tool_name}:\n"
+                f"Dataset validation failed for {self._tool_label()}:\n"
                 + "\n".join(f"  - {e}" for e in errors)
             )
         
@@ -100,7 +111,7 @@ class ToolTrainer:
         train_kwargs['data'] = dataset_ref
         
         logger.info(
-            f"Starting training for {self.tool.tool_name} on "
+            f"Starting training for {self._tool_label()} on "
             f"{dataset.name} ({dataset.num_images} images, {config.epochs} epochs)"
         )
         self._emit_progress('training_started', dataset=dataset.name,
@@ -110,10 +121,10 @@ class ToolTrainer:
         self._training_active = True
         try:
             await self.tool.train(dataset_ref, train_kwargs)
-            self._emit_progress('training_completed', state=self.tool.state.value)
+            self._emit_progress('training_completed', state=self._tool_state_value())
             logger.info(
-                f"Training complete for {self.tool.tool_name}. "
-                f"State: {self.tool.state.value}"
+                f"Training complete for {self._tool_label()}. "
+                f"State: {self._tool_state_value()}"
             )
         except Exception as e:
             self._emit_progress('training_failed', error=str(e))
@@ -123,8 +134,21 @@ class ToolTrainer:
 
     def _get_tool_type(self) -> str:
         """Infer tool type string from the tool class for dataset validation."""
-        from ..core.tools.pipeline import AVAILABLE_TOOL_TYPES
-        for type_name, type_class in AVAILABLE_TOOL_TYPES.items():
-            if isinstance(self.tool, type_class):
-                return type_name
+        if ModelNode is not None and isinstance(self.tool, ModelNode):
+            try:
+                from ..core.registry import NodeRegistry
+                for type_name, type_class in NodeRegistry._registry.items():
+                    if isinstance(self.tool, type_class):
+                        return type_name
+            except Exception:
+                pass
+            return "unknown"
+
+        try:
+            from ..core.tools.pipeline import AVAILABLE_TOOL_TYPES
+            for type_name, type_class in AVAILABLE_TOOL_TYPES.items():
+                if isinstance(self.tool, type_class):
+                    return type_name
+        except Exception:
+            pass
         return 'unknown'

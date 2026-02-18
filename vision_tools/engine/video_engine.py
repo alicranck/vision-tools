@@ -11,19 +11,9 @@ import asyncio
 import cv2
 import logging
 import traceback
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, List, Optional
 
-import numpy as np
-
-# Support both old VisionPipeline and new Pipeline
-try:
-    from ..pipeline import Pipeline as NewPipeline
-except ImportError:
-    NewPipeline = None
-
-from ..core.tools.pipeline import VisionPipeline
-from ..utils.schemas import BatchPayload, FrameMetadata, FrameResult
-from ..utils.types import FrameContext
+from ..utils.schemas import BatchPayload, FrameResult
 from .frame_producer import FrameProducer
 from .batcher import DynamicBatcher
 
@@ -38,15 +28,18 @@ class VideoInferenceEngine:
     """
     Orchestrates the video processing pipeline with dynamic batching.
     
-    Connects FrameProducer → DynamicBatcher → VisionPipeline, supporting
+    Connects FrameProducer → DynamicBatcher → pipeline, supporting
     both real-time streaming and offline batch processing modes.
     """
 
-    def __init__(self, tool_pipeline: VisionPipeline, video_path: str,
+    def __init__(self, tool_pipeline: Any, video_path: str,
                  max_batch_size: int = 16, max_wait_ms: float = 50.0):
         """
         Args:
-            tool_pipeline: The vision pipeline to process frames
+            tool_pipeline: The pipeline to process frames.
+                Supported interfaces:
+                - Legacy VisionPipeline with process_batch_payload()
+                - v2 Pipeline with run_batch()
             video_path: Path to video file or URL
             max_batch_size: Max frames per batch
             max_wait_ms: Max wait time before flushing partial batch
@@ -58,6 +51,28 @@ class VideoInferenceEngine:
             max_wait_ms=max_wait_ms,
         )
         self.video_path = self.producer.video_path
+
+    def _process_batch(self, payload: BatchPayload) -> BatchPayload:
+        """Process a batch payload via legacy or v2 pipeline interface."""
+        if hasattr(self.tool_pipeline, "process_batch_payload"):
+            return self.tool_pipeline.process_batch_payload(payload)
+
+        if hasattr(self.tool_pipeline, "run_batch"):
+            outputs = self.tool_pipeline.run_batch(payload.frames)
+            payload.frame_results = []
+            for idx, out in enumerate(outputs):
+                payload.frame_results.append(
+                    FrameResult(
+                        metadata=payload.frame_metadatas[idx],
+                        results=out if isinstance(out, dict) else {"output": out},
+                        tools_run=bool(out),
+                    )
+                )
+            return payload
+
+        raise TypeError(
+            "Unsupported pipeline interface. Expected process_batch_payload() or run_batch()."
+        )
 
     # ------------------------------------------------------------------
     # Mode 1: Real-time streaming (legacy compatible)
@@ -109,7 +124,7 @@ class VideoInferenceEngine:
                     break
 
                 # Process the batch through the pipeline
-                processed = self.tool_pipeline.process_batch_payload(batch)
+                processed = self._process_batch(batch)
 
                 # Yield each frame as MJPEG
                 for i, frame in enumerate(processed.frames):
@@ -194,7 +209,7 @@ class VideoInferenceEngine:
                 if batch is None:
                     break
 
-                processed = self.tool_pipeline.process_batch_payload(batch)
+                processed = self._process_batch(batch)
                 all_results.extend(processed.frame_results)
 
                 if on_batch:

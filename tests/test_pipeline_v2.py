@@ -9,6 +9,7 @@ Run: pytest tests/test_pipeline_v2.py -v
 """
 import pytest
 import numpy as np
+from pydantic import BaseModel
 
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.config import NodeConfig, PipelineConfig, ExecutionConfig
@@ -224,6 +225,38 @@ class TestSchemaValidator:
 
         nodes = {"det": NoOutputNode(), "emb": NeedsInputNode()}
         with pytest.raises(SchemaValidationError, match="Schema validation failed"):
+            SchemaValidator.validate(dag, nodes)
+
+    def test_field_type_mismatch_raises(self):
+        class ProducerOut(BaseModel):
+            value: int
+
+        class ConsumerIn(BaseModel):
+            value: str
+
+        class ProducerNode(Node):
+            OutputSchema = ProducerOut
+            InputSchema = None
+            def __init__(self): super().__init__("prod", {})
+            def process(self, data, ctx): return {"value": 1}
+
+        class ConsumerNode(Node):
+            OutputSchema = None
+            InputSchema = ConsumerIn
+            def __init__(self): super().__init__("cons", {})
+            def process(self, data, ctx): return {}
+
+        config = PipelineConfig(
+            name="type_mismatch",
+            nodes=[
+                NodeConfig(node_id="prod", node_type="stub_det", config={}),
+                NodeConfig(node_id="cons", node_type="stub_emb", config={}, depends_on=["prod"]),
+            ],
+        )
+        dag = DAG(config)
+        nodes = {"prod": ProducerNode(), "cons": ConsumerNode()}
+
+        with pytest.raises(SchemaValidationError, match="type mismatch"):
             SchemaValidator.validate(dag, nodes)
 
 
