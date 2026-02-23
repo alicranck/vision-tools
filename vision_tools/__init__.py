@@ -60,6 +60,7 @@ from vision_tools.nodes.model_node import ModelNode
 from vision_tools.nodes.logic_node import LogicNode
 from vision_tools.nodes.remote_node import RemoteNode
 from vision_tools.nodes.aggregator_node import AggregatorNode
+from vision_tools.nodes.dynamic_logic_node import DynamicLogicNode
 
 # Backends
 from vision_tools.backends.base import Backend
