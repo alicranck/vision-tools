@@ -35,6 +35,10 @@ Schemas:
 Engine:
     VideoInferenceEngine — Video processing orchestration
 """
+from vision_tools.utils.locations import setup_cache_env
+
+# Initialize environment for ML libraries
+setup_cache_env()
 
 # Core abstractions
 from vision_tools.core.node import Node, NodeState, NodeContext

@@ -10,11 +10,11 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
+from vision_tools.utils.locations import MODELS_CACHE_DIR, CACHE_DIR
+
 logger = logging.getLogger(__name__)
 
-# Default cache directory
-_DEFAULT_CACHE_DIR = Path.home() / ".cache" / "vision_tools" / "models"
-_CACHE_ENV_VAR = "VISION_TOOLS_MODEL_CACHE_DIR"
+# Note: Environment variable VISION_TOOLS_CACHE_DIR is now handled in vision_tools.utils.locations
 
 
 class ModelCache:
@@ -30,9 +30,7 @@ class ModelCache:
     """
 
     def __init__(self, cache_dir: Path | str | None = None) -> None:
-        env_cache_dir = os.getenv(_CACHE_ENV_VAR)
-        selected = cache_dir or env_cache_dir or _DEFAULT_CACHE_DIR
-        self.cache_dir = Path(selected).expanduser()
+        self.cache_dir = Path(cache_dir or MODELS_CACHE_DIR).expanduser()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def get_or_download(
