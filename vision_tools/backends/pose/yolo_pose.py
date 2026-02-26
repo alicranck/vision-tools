@@ -6,6 +6,7 @@ Ported from ``PoseEstimator``.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -27,8 +28,8 @@ class YoloPoseBackend:
 
     def load_model(self, model_path: str, device: str = "auto") -> Any:
         """Load YOLO-Pose model."""
-        from ultralytics import YOLO
-        model = YOLO(model_path)
+        from ultralytics import YOLO, settings as yolo_settings
+        model = YOLO(self._resolve_checkpoint_path(model_path, yolo_settings))
         return model
 
     def infer(self, model: Any, inputs: Any) -> Any:
@@ -64,3 +65,11 @@ class YoloPoseBackend:
 
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "openvino"]
+
+    @staticmethod
+    def _resolve_checkpoint_path(model_path: str, yolo_settings: Any) -> str:
+        """Force bare checkpoint names to resolve under Ultralytics weights_dir."""
+        p = Path(model_path)
+        if p.suffix.lower() == ".pt" and not p.is_absolute() and p.name == model_path:
+            return str(Path(yolo_settings["weights_dir"]) / p.name)
+        return model_path

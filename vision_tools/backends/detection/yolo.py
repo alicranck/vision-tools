@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -51,10 +52,10 @@ class YoloBackend:
             model_path: Path to YOLO model file.
             device: Target device — "auto", "cuda", "cpu", "openvino".
         """
-        from ultralytics import YOLOE
+        from ultralytics import YOLOE, settings as yolo_settings
         from trackers import SORTTracker
 
-        model = YOLOE(model_path)
+        model = YOLOE(self._resolve_checkpoint_path(model_path, yolo_settings))
 
         if not self._prompt_free and self._vocabulary:
             if hasattr(model, "get_text_pe") and hasattr(model, "set_classes"):
@@ -146,3 +147,11 @@ class YoloBackend:
             nms=True, imgsz=640, batch=1, dynamic=True,
         )
         return YOLOE(exported)
+
+    @staticmethod
+    def _resolve_checkpoint_path(model_path: str, yolo_settings: Any) -> str:
+        """Force bare checkpoint names to resolve under Ultralytics weights_dir."""
+        p = Path(model_path)
+        if p.suffix.lower() == ".pt" and not p.is_absolute() and p.name == model_path:
+            return str(Path(yolo_settings["weights_dir"]) / p.name)
+        return model_path

@@ -1,7 +1,9 @@
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 from vision_tools.backends.detection.yolo import YoloBackend
+from vision_tools.backends.pose.yolo_pose import YoloPoseBackend
 
 
 class _FakeDetections:
@@ -46,3 +48,27 @@ def test_infer_uses_configured_imgsz_and_conf(monkeypatch):
 
     assert model.last_kwargs["imgsz"] == 1024
     assert model.last_kwargs["conf"] == 0.73
+
+
+def test_resolve_checkpoint_path_maps_bare_pt_to_weights_dir():
+    resolved = YoloBackend._resolve_checkpoint_path(
+        "yoloe-11s-seg.pt",
+        {"weights_dir": Path("/tmp/cache/models")},
+    )
+    assert resolved == "/tmp/cache/models/yoloe-11s-seg.pt"
+
+
+def test_resolve_checkpoint_path_keeps_absolute_path():
+    resolved = YoloBackend._resolve_checkpoint_path(
+        "/models/custom.pt",
+        {"weights_dir": Path("/tmp/cache/models")},
+    )
+    assert resolved == "/models/custom.pt"
+
+
+def test_pose_resolve_checkpoint_path_maps_bare_pt_to_weights_dir():
+    resolved = YoloPoseBackend._resolve_checkpoint_path(
+        "yolo11n-pose.pt",
+        {"weights_dir": Path("/tmp/cache/models")},
+    )
+    assert resolved == "/tmp/cache/models/yolo11n-pose.pt"
