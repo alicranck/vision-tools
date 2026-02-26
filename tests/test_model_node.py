@@ -404,3 +404,22 @@ class TestModelCache:
             monkeypatch.setenv("VISION_TOOLS_CACHE_DIR", tmpdir)
             cache = ModelCache()
             assert cache.cache_dir == Path(tmpdir) / "models"
+
+    def test_bare_checkpoint_id_resolves_to_cache_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache = ModelCache(cache_dir=tmpdir)
+            result = cache.get_or_download("yoloe-11s-seg.pt")
+            assert result == str(Path(tmpdir) / "yoloe-11s-seg.pt")
+
+    def test_bare_checkpoint_id_with_unimplemented_downloader_resolves_to_cache_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache = ModelCache(cache_dir=tmpdir)
+
+            def unimplemented_download(_model_id, _dest):
+                raise NotImplementedError()
+
+            result = cache.get_or_download(
+                "yoloe-11s-seg.pt",
+                downloader=unimplemented_download,
+            )
+            assert result == str(Path(tmpdir) / "yoloe-11s-seg.pt")

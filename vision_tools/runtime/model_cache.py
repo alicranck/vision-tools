@@ -72,15 +72,35 @@ class ModelCache:
             except NotImplementedError:
                 logger.info(
                     f"ModelCache: downloader not implemented, "
-                    f"passing through '{model_id}'"
+                    f"falling back to default resolution for '{model_id}'"
                 )
-                return model_id
             except Exception as e:
                 logger.error(f"ModelCache: download failed for '{model_id}': {e}")
 
-        # 4. Pass through (library-managed models like HuggingFace IDs)
+        # 4. For known Ultralytics checkpoint IDs (e.g. 'yoloe-11s-seg.pt'),
+        # force an absolute cache destination so Ultralytics won't download into CWD.
+        if self._is_bare_checkpoint_id(model_id):
+            logger.debug(f"ModelCache: resolving bare checkpoint '{model_id}' to {cached_path}")
+            return str(cached_path)
+
+        # 5. Pass through (library-managed models like HuggingFace IDs)
         logger.debug(f"ModelCache: passing through '{model_id}'")
         return model_id
+
+    @staticmethod
+    def _is_bare_checkpoint_id(model_id: str) -> bool:
+        """Return True when model_id is a plain checkpoint filename (no path/url)."""
+        lower = model_id.lower().strip()
+        if not lower:
+            return False
+        if "://" in lower:
+            return False
+        p = Path(model_id)
+        if p.is_absolute():
+            return False
+        if p.name != model_id:
+            return False
+        return p.suffix.lower() in {".pt"}
 
     def clear(self) -> None:
         """Remove all cached model files."""
