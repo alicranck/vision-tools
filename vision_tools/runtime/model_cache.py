@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
-from vision_tools.utils.locations import MODELS_CACHE_DIR, CACHE_DIR
+from vision_tools.utils.locations import get_models_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,8 @@ class ModelCache:
     """
 
     def __init__(self, cache_dir: Path | str | None = None) -> None:
-        self.cache_dir = Path(cache_dir or MODELS_CACHE_DIR).expanduser()
+        resolved = Path(cache_dir).expanduser() if cache_dir else get_models_cache_dir()
+        self.cache_dir = resolved
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def get_or_download(
