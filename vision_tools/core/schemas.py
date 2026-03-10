@@ -9,8 +9,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 
-import numpy as np
 from pydantic import BaseModel, Field, ConfigDict
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - environment dependent
+    np = None
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +87,8 @@ class SegmentationMask(BaseModel):
 
     def to_binary_mask(self) -> np.ndarray:
         """Decode RLE to a binary numpy mask."""
+        if np is None:  # pragma: no cover - environment dependent
+            raise RuntimeError("numpy is required to decode segmentation masks.")
         mask = np.zeros(self.height * self.width, dtype=np.uint8)
         pos = 0
         for i, count in enumerate(self.rle_counts):
@@ -99,6 +105,8 @@ class SegmentationMask(BaseModel):
         Convention: counts alternate [background, foreground, background, ...].
         Even indices (0, 2, 4...) are background runs, odd indices are foreground.
         """
+        if np is None:  # pragma: no cover - environment dependent
+            raise RuntimeError("numpy is required to encode segmentation masks.")
         flat = mask.flatten().astype(np.uint8)
         n = len(flat)
         

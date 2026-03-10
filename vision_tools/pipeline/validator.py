@@ -1,165 +1,121 @@
-"""
-SchemaValidator — Validates I/O compatibility at pipeline construction time.
-
-Checks that each node's InputSchema can be satisfied by the combined
-OutputSchemas of its dependencies.
-"""
 from __future__ import annotations
 
-import logging
-from types import NoneType, UnionType
-from typing import Any, Union, get_args, get_origin
-
+from vision_tools.core.graph_types import FrameInfo, Image
 from vision_tools.core.node import Node
+from vision_tools.core.type_refs import SimpleTypeRef, TypeRegistry, serialize_type_ref
 from vision_tools.pipeline.graph import DAG
-
-logger = logging.getLogger(__name__)
+from vision_tools.pipeline.refs import parse_port_ref
 
 
 class SchemaValidationError(Exception):
-    """Raised when schema validation fails."""
     pass
 
 
+INPUT_PORTS = {
+    "image": SimpleTypeRef("Image"),
+    "frame_info": SimpleTypeRef("FrameInfo"),
+}
+
+
 class SchemaValidator:
-    """Validates I/O schema compatibility across the pipeline graph.
-
-    For each node with an ``InputSchema``, verifies that its dependency
-    nodes produce outputs containing the required fields.
-    """
-
     @staticmethod
     def validate(dag: DAG, nodes: dict[str, Node]) -> list[str]:
-        """Validate I/O compatibility for all nodes.
-
-        Args:
-            dag: The pipeline DAG.
-            nodes: Mapping of node_id → Node instance.
-
-        Returns:
-            List of warning messages (soft validation — missing schemas
-            produce warnings, not errors).
-
-        Raises:
-            SchemaValidationError: If a hard incompatibility is detected.
-        """
         errors: list[str] = []
 
-        for node_id, node in nodes.items():
-            input_schema = node.InputSchema
-            if input_schema is None:
-                continue  # Node accepts raw input, no validation needed
+        for node_id, node_config in dag.nodes.items():
+            if node_id == "input":
+                errors.append("The node id 'input' is reserved.")
+                continue
 
-            # Collect output fields from upstream dependencies
-            deps = dag.dependencies(node_id)
-            if not deps:
-                continue  # Root node, takes pipeline input
+            if node_id not in nodes:
+                errors.append(f"Node '{node_id}' was not instantiated.")
+                continue
 
-            upstream_fields: dict[str, list[Any]] = {}
-            for dep_id in deps:
-                dep_node = nodes.get(dep_id)
-                if dep_node is None:
+            node = nodes[node_id]
+            expected_inputs = node.get_input_ports()
+            bound_inputs = node_config.inputs
+
+            if set(bound_inputs.keys()) != set(expected_inputs.keys()):
+                errors.append(
+                    f"Node '{node_id}' input bindings {sorted(bound_inputs.keys())} "
+                    f"do not match declared inputs {sorted(expected_inputs.keys())}"
+                )
+
+            for input_name, target_type in expected_inputs.items():
+                binding = bound_inputs.get(input_name)
+                if binding is None:
                     continue
-                output_schema = dep_node.OutputSchema
-                if output_schema is None:
+
+                try:
+                    producer_id, producer_port = parse_port_ref(binding)
+                except ValueError as exc:
+                    errors.append(str(exc))
+                    continue
+
+                producer_ports = INPUT_PORTS if producer_id == "input" else None
+                if producer_id != "input":
+                    producer = nodes.get(producer_id)
+                    if producer is None:
+                        errors.append(
+                            f"Node '{node_id}' references unknown producer '{producer_id}'."
+                        )
+                        continue
+                    producer_ports = producer.get_output_ports()
+
+                assert producer_ports is not None
+                if producer_port not in producer_ports:
                     errors.append(
-                        f"Node '{dep_id}' has no OutputSchema; "
-                        f"cannot validate input for '{node_id}'"
+                        f"Node '{node_id}' references unknown port '{binding}'."
                     )
                     continue
-                for field_name, field_info in output_schema.model_fields.items():
-                    upstream_fields.setdefault(field_name, []).append(field_info.annotation)
 
-            # Check required input fields are present and type-compatible
-            for field_name, field_info in input_schema.model_fields.items():
-                if not field_info.is_required():
-                    continue
-
-                if field_name not in upstream_fields:
+                source_type = producer_ports[producer_port]
+                if not TypeRegistry.is_assignable(source_type, target_type):
                     errors.append(
-                        f"Node '{node_id}' requires field '{field_name}' "
-                        f"not found in upstream outputs {set(upstream_fields.keys())}"
+                        f"Node '{node_id}' input '{input_name}' expects "
+                        f"{serialize_type_ref(target_type)}, got "
+                        f"{serialize_type_ref(source_type)} from '{binding}'."
                     )
-                    continue
 
-                expected = field_info.annotation
-                provided = upstream_fields[field_name]
-                if not any(
-                    SchemaValidator._is_type_compatible(src, expected)
-                    for src in provided
-                ):
+            if hasattr(node, "validate_config"):
+                try:
+                    node.validate_config(dag, nodes)
+                except Exception as exc:
+                    errors.append(f"Node '{node_id}' config invalid: {exc}")
+
+        for output_name, binding in dag.config.outputs.items():
+            try:
+                producer_id, producer_port = parse_port_ref(binding)
+            except ValueError as exc:
+                errors.append(f"Output '{output_name}' invalid: {exc}")
+                continue
+
+            if producer_id == "input":
+                if producer_port not in INPUT_PORTS:
                     errors.append(
-                        f"Node '{node_id}' field '{field_name}' type mismatch: "
-                        f"expected {expected!r}, upstream provides {provided!r}"
+                        f"Output '{output_name}' references unknown input port '{binding}'."
                     )
+                continue
+
+            if producer_id not in nodes:
+                errors.append(
+                    f"Output '{output_name}' references unknown node '{producer_id}'."
+                )
+                continue
+
+            if producer_port not in nodes[producer_id].get_output_ports():
+                errors.append(
+                    f"Output '{output_name}' references unknown port '{binding}'."
+                )
+
+        try:
+            dag.topological_sort()
+        except Exception as exc:
+            errors.append(str(exc))
 
         if errors:
-            for err in errors:
-                logger.error(f"SchemaValidator: {err}")
             raise SchemaValidationError(
-                "Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+                "Schema validation failed:\n" + "\n".join(f"  - {error}" for error in errors)
             )
 
         return []
-
-    @staticmethod
-    def _is_type_compatible(source: Any, target: Any) -> bool:
-        """Best-effort type compatibility check for schema field annotations."""
-        if target is Any or source is Any:
-            return True
-        if source == target:
-            return True
-
-        source_origin = get_origin(source)
-        target_origin = get_origin(target)
-        source_args = get_args(source)
-        target_args = get_args(target)
-        union_origins = (Union, UnionType)
-
-        # Union handling (including Optional[T]).
-        if target_origin in union_origins:
-            return any(
-                SchemaValidator._is_type_compatible(source, t_arg)
-                for t_arg in target_args
-            )
-        if source_origin in union_origins:
-            return all(
-                SchemaValidator._is_type_compatible(s_arg, target)
-                for s_arg in source_args
-            )
-
-        if source_origin is None and target_origin is None:
-            try:
-                return issubclass(source, target)
-            except Exception:
-                return False
-
-        if source is NoneType or target is NoneType:
-            return source is target
-
-        if source_origin in (tuple, list, dict, set) and target_origin in (tuple, list, dict, set):
-            if source_origin != target_origin:
-                return False
-            if not target_args:
-                return True
-            if len(source_args) != len(target_args):
-                return False
-            return all(
-                SchemaValidator._is_type_compatible(s_arg, t_arg)
-                for s_arg, t_arg in zip(source_args, target_args)
-            )
-
-        # Matching generic origins with arguments (e.g., list[int] -> list[float]).
-        if source_origin is not None and target_origin is not None:
-            if source_origin != target_origin:
-                return False
-            if not target_args:
-                return True
-            if len(source_args) != len(target_args):
-                return False
-            return all(
-                SchemaValidator._is_type_compatible(s_arg, t_arg)
-                for s_arg, t_arg in zip(source_args, target_args)
-            )
-
-        return False

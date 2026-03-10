@@ -7,16 +7,22 @@ scores, builds FrameMetadata, and pushes to an asyncio Queue.
 import asyncio
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
-import cv2
 import numpy as np
 
 from ..utils.types import FrameContext
 from ..utils.schemas import FrameMetadata
-from ..utils.image_utils import color_histogram
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cv2():
+    try:
+        import cv2
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError("opencv-python-headless is required for video frame production.") from exc
+    return cv2
 
 
 class FrameProducer:
@@ -49,6 +55,7 @@ class FrameProducer:
             queue: Async queue to push frames to
             skip_frames: Skip every N frames (0 = no skip)
         """
+        cv2 = _get_cv2()
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
             logger.error(f"Error opening video: {self.video_path}")
@@ -82,8 +89,9 @@ class FrameProducer:
             cap.release()
             await queue.put(None)  # Signal end of stream
 
-    def _read_frame(self, cap: cv2.VideoCapture):
+    def _read_frame(self, cap: Any):
         """Read a single frame and compute metadata (runs in thread)."""
+        cv2 = _get_cv2()
         ret, frame = cap.read()
         if not ret:
             return None
@@ -111,6 +119,9 @@ class FrameProducer:
     @staticmethod
     def _hist_distance(frame1: np.ndarray, frame2: np.ndarray) -> float:
         """Bhattacharyya distance between color histograms."""
+        cv2 = _get_cv2()
+        from ..utils.image_utils import color_histogram
+
         hist1 = color_histogram(frame1)
         hist2 = color_histogram(frame2)
         return cv2.compareHist(hist1, hist2, cv2.HISTCMP_BHATTACHARYYA)

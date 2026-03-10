@@ -4,9 +4,16 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-import cv2
 
 from .types import ImageHandle, Sequence, Union, Tuple, IMG_MODES
+
+
+def _get_cv2():
+    try:
+        import cv2
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError("opencv-python-headless is required for OpenCV image utilities.") from exc
+    return cv2
 
 
 def load_image_pil(img_handle: ImageHandle, mode="RGB") -> Image.Image:
@@ -37,11 +44,13 @@ def load_image_opencv(image_handle: ImageHandle, as_mask: bool = False,) -> np.n
         img = np.array(image_handle)
 
     else:
+        cv2 = _get_cv2()
         img = cv2.imread(image_handle) # assume it's a path-like object
         if img.ndim == 3 and img.shape[2] != 1:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     if as_mask:
+        cv2 = _get_cv2()
         if img.ndim == 3 and img.shape[2] != 1:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = np.where(img > 0.5, 1, 0).astype(np.uint8)
@@ -78,11 +87,18 @@ def base64_encode(np_array, image_format="jpg"):
     """
     Converts a NumPy array to a Base64-encoded Data string using OpenCV.
     """
-    is_success, buffer = cv2.imencode(f".{image_format}", np_array)
-    if not is_success:
-        raise ValueError("OpenCV failed to encode the image array.")
+    try:
+        cv2 = _get_cv2()
+        is_success, buffer = cv2.imencode(f".{image_format}", np_array)
+        if not is_success:
+            raise ValueError("OpenCV failed to encode the image array.")
+        img_bytes = buffer.tobytes()
+    except RuntimeError:
+        pil_image = Image.fromarray(np_array)
+        output = io.BytesIO()
+        pil_image.save(output, format=image_format.upper())
+        img_bytes = output.getvalue()
 
-    img_bytes = buffer.tobytes()
     base64_encoded_image = base64.b64encode(img_bytes).decode('utf-8')
 
     return base64_encoded_image
@@ -91,6 +107,7 @@ def base64_encode(np_array, image_format="jpg"):
 def color_histogram(image: np.ndarray, bins: int = 256) -> \
                         Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Computes the color histogram for each channel in the image."""
+    cv2 = _get_cv2()
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv], [0], None, [bins], [0, bins])
     cv2.normalize(hist, hist)

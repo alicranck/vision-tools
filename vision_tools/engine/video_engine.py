@@ -8,10 +8,11 @@ Supports two modes:
 2. Batch processing: processes entire video and collects all results
 """
 import asyncio
-import cv2
 import logging
 import traceback
 from typing import Any, AsyncGenerator, Callable, List, Optional
+
+from pydantic import BaseModel
 
 from ..utils.schemas import BatchPayload, FrameResult
 from .frame_producer import FrameProducer
@@ -22,6 +23,20 @@ logger = logging.getLogger(__name__)
 
 DELAY_SECONDS_DEFAULT = 3.0
 MAX_QUEUE_SIZE = 300
+
+
+def _serialize_result_value(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump()
+    return value
+
+
+def _get_cv2():
+    try:
+        import cv2
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise RuntimeError("opencv-python-headless is required for streaming video output.") from exc
+    return cv2
 
 
 class VideoInferenceEngine:
@@ -61,11 +76,20 @@ class VideoInferenceEngine:
             outputs = self.tool_pipeline.run_batch(payload.frames)
             payload.frame_results = []
             for idx, out in enumerate(outputs):
+                if isinstance(out, dict):
+                    results = {
+                        key: _serialize_result_value(value)
+                        for key, value in out.items()
+                    }
+                elif out is not None:
+                    results = {"output": _serialize_result_value(out)}
+                else:
+                    results = {}
                 payload.frame_results.append(
                     FrameResult(
                         metadata=payload.frame_metadatas[idx],
-                        results=out if isinstance(out, dict) else {"output": out},
-                        tools_run=bool(out),
+                        results=results,
+                        tools_run=bool(results),
                     )
                 )
             return payload
@@ -145,6 +169,7 @@ class VideoInferenceEngine:
                     if on_data:
                         await on_data(data)
 
+                    cv2 = _get_cv2()
                     _, buffer = cv2.imencode(
                         '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70]
                     )

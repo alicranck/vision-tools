@@ -1,31 +1,14 @@
-"""
-Captioner — Task node for image captioning.
-
-Supports multiple captioning models (SmolVLM, LlamaCpp) via backend config.
-
-Usage::
-
-    {"node_type": "captioner",
-     "config": {"model": "smolvlm"}}
-"""
 from __future__ import annotations
-
-import logging
-from typing import Any
 
 from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
-from vision_tools.core.node import NodeContext
+from vision_tools.core.graph_types import Caption
 from vision_tools.core.registry import NodeRegistry
-from vision_tools.core.schemas import CaptionResult
-from vision_tools.nodes.model_node import ModelNode
-
-logger = logging.getLogger(__name__)
+from vision_tools.nodes.model.model_node import ModelNode
 
 
 class CaptionerConfig(BaseModel):
-    """Config schema for Captioner."""
     model: str = Field("smolvlm", description="Model backend: 'smolvlm', 'llamacpp'")
     runtime: str = Field("auto", description="Runtime: 'auto', 'openvino', 'cpu'")
     imgsz: int = Field(512, description="Input image size for preprocessing")
@@ -34,13 +17,8 @@ class CaptionerConfig(BaseModel):
 
 @NodeRegistry.register("captioner", category="captioning")
 class Captioner(ModelNode):
-    """Generate text captions from images.
-
-    The model backend (SmolVLM, LlamaCpp, etc.) is resolved from config.
-    """
-
-    OutputSchema = CaptionResult
-    InputSchema = None
+    InputPorts = {"image": "Image"}
+    OutputPorts = {"caption": "Caption"}
 
     def __init__(self, node_id: str = "captioner", config: dict | None = None, **kwargs) -> None:
         config = config or {}
@@ -48,6 +26,21 @@ class Captioner(ModelNode):
         if "backend" not in kwargs:
             kwargs["backend"] = BackendRegistry.get(task="captioning", model=model_name)
         super().__init__(node_id=node_id, config=config, **kwargs)
+
+    def preprocess(self, inputs, context):
+        return inputs["image"].data
+
+    def normalize_outputs(self, outputs):
+        if isinstance(outputs, Caption):
+            return {"caption": outputs}
+        if isinstance(outputs, dict) and "caption" in outputs and isinstance(outputs["caption"], Caption):
+            return outputs
+        if not isinstance(outputs, dict):
+            raise TypeError(f"{self.node_id}: backend output must be a dict.")
+        caption = outputs.get("caption", outputs)
+        if hasattr(caption, "model_dump"):
+            caption = caption.model_dump()
+        return {"caption": Caption.model_validate(caption)}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:

@@ -1,146 +1,122 @@
-"""
-Node — The fundamental abstraction in vision-tools v2.
-
-Every participant in a VisionPipeline is a Node. Nodes declare typed
-I/O contracts via Pydantic schemas. The pipeline validates schema
-compatibility at construction time.
-
-Node types:
-    - ModelNode   — wraps an ML model (detection, embedding, etc.)
-    - LogicNode   — custom code / LLM-generated logic
-    - RemoteNode  — REST proxy to a node on another machine
-"""
 from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, ClassVar, Dict, Optional, Type
+from typing import Any, ClassVar, Optional, Type
 
 from pydantic import BaseModel, Field
+
+from vision_tools.core.type_refs import (
+    PortTypeRef,
+    TypeRegistry,
+    parse_type_ref,
+    serialize_type_ref,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Node state
-# ---------------------------------------------------------------------------
-
 class NodeState(str, Enum):
-    """Lifecycle state of a pipeline node."""
-    UNLOADED = "unloaded"    # Not yet loaded (ModelNode default)
-    READY = "ready"          # Ready to process
-    FAILED = "failed"        # Failed to load or verify
-    TRAINING = "training"    # Currently being fine-tuned
+    UNLOADED = "unloaded"
+    READY = "ready"
+    FAILED = "failed"
+    TRAINING = "training"
 
-
-# ---------------------------------------------------------------------------
-# Node context (runtime data passed through the pipeline)
-# ---------------------------------------------------------------------------
 
 class NodeContext(BaseModel):
-    """Runtime context passed to every node during processing.
-
-    Carries frame-level metadata and upstream results so nodes can
-    access outputs from their dependency nodes.
-    """
     frame_idx: int = 0
     timestamp: float = 0.0
-    frame_shape: tuple[int, ...] = (0, 0, 3)
-    scene_change_score: float = Field(0.0, ge=0.0, le=1.0)
+    frame_shape: tuple[int, int, int] = (0, 0, 3)
+    scene_change_score: float | None = Field(default=None, ge=0.0, le=1.0)
     camera_id: str = "default"
-    upstream_results: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="node_id → output from dependency nodes",
-    )
+    port_values: dict[str, Any] = Field(default_factory=dict)
 
-
-# ---------------------------------------------------------------------------
-# Node ABC
-# ---------------------------------------------------------------------------
 
 class Node(ABC):
-    """Base interface for all pipeline participants.
-
-    Subclasses must:
-    1. Set ``InputSchema`` / ``OutputSchema`` class attributes as Pydantic models.
-    2. Implement ``process(data, context) -> Any``.
-
-    Everything else (lifecycle, model loading, caching) lives in
-    specialized subclasses like ``ModelNode``, not here.
-    """
-
-    # Typed I/O contracts — override in subclasses
     InputSchema: ClassVar[Optional[Type[BaseModel]]] = None
     OutputSchema: ClassVar[Optional[Type[BaseModel]]] = None
+
+    InputPorts: ClassVar[dict[str, str | PortTypeRef]] = {}
+    OutputPorts: ClassVar[dict[str, str | PortTypeRef]] = {}
+    DynamicPorts: ClassVar[bool] = False
 
     def __init__(self, node_id: str, config: dict[str, Any] | None = None) -> None:
         self.node_id = node_id
         self.config = config or {}
-        self._state = NodeState.READY  # non-model nodes are immediately ready
-
-    # --- Core interface ---
+        self._state = NodeState.READY
 
     @abstractmethod
-    def process(self, data: Any, context: NodeContext) -> Any:
-        """Process input data and return output.
-
-        Args:
-            data: Input data matching ``InputSchema`` (or raw frame/dict).
-            context: Runtime context with frame metadata and upstream results.
-
-        Returns:
-            Output matching ``OutputSchema``.
-        """
+    def process(self, inputs: Any, context: NodeContext) -> dict[str, Any]:
         ...
-
-    # --- State ---
 
     @property
     def state(self) -> NodeState:
-        """Current lifecycle state."""
         return self._state
 
-    # --- Introspection (for LLM agents and registry) ---
+    def get_input_ports(self) -> dict[str, PortTypeRef]:
+        return {
+            name: parse_type_ref(type_ref)
+            for name, type_ref in self.InputPorts.items()
+        }
+
+    def get_output_ports(self) -> dict[str, PortTypeRef]:
+        return {
+            name: parse_type_ref(type_ref)
+            for name, type_ref in self.OutputPorts.items()
+        }
+
+    def validate_inputs(self, inputs: dict[str, Any]) -> dict[str, BaseModel]:
+        expected_ports = self.get_input_ports()
+        if set(inputs.keys()) != set(expected_ports.keys()):
+            raise ValueError(
+                f"{self.node_id}: expected inputs {sorted(expected_ports.keys())}, "
+                f"got {sorted(inputs.keys())}"
+            )
+
+        return {
+            name: TypeRegistry.validate(type_ref, inputs[name])
+            for name, type_ref in expected_ports.items()
+        }
+
+    def validate_outputs(self, outputs: dict[str, Any]) -> dict[str, BaseModel]:
+        expected_ports = self.get_output_ports()
+        unknown = set(outputs.keys()) - set(expected_ports.keys())
+        if unknown:
+            raise ValueError(
+                f"{self.node_id}: produced undeclared output ports {sorted(unknown)}"
+            )
+
+        return {
+            name: TypeRegistry.validate(expected_ports[name], value)
+            for name, value in outputs.items()
+        }
 
     @classmethod
     def get_config_schema(cls) -> Optional[Type[BaseModel]]:
-        """Return a Pydantic model describing valid config for this node type.
-
-        Used by LLM agents to know what parameters are available.
-        Override in subclasses that accept config.
-        """
         return None
 
     @classmethod
     def get_config_options(cls) -> Optional[dict[str, Any]]:
-        """Return dynamic config options for app/LLM discovery.
-
-        Unlike ``get_config_schema()``, this can include runtime-registered
-        capabilities (for example available model families/sizes/devices).
-        """
         return None
 
     @classmethod
     def get_metadata(cls) -> dict[str, Any]:
-        """Return introspection metadata for registry discovery.
-
-        Returns a dict with:
-            description, input_schema, output_schema, config_schema
-        """
         return {
             "description": cls.__doc__ or "",
-            "input_schema": (
-                cls.InputSchema.model_json_schema()
-                if cls.InputSchema else None
-            ),
-            "output_schema": (
-                cls.OutputSchema.model_json_schema()
-                if cls.OutputSchema else None
-            ),
+            "input_ports": {
+                name: serialize_type_ref(type_ref)
+                for name, type_ref in cls.InputPorts.items()
+            },
+            "output_ports": {
+                name: serialize_type_ref(type_ref)
+                for name, type_ref in cls.OutputPorts.items()
+            },
+            "dynamic_ports": cls.DynamicPorts,
             "config_schema": (
                 cls.get_config_schema().model_json_schema()
-                if cls.get_config_schema() else None
+                if cls.get_config_schema()
+                else None
             ),
             "config_options": cls.get_config_options(),
         }

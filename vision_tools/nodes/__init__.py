@@ -1,30 +1,19 @@
-"""
-Nodes package — pipeline node implementations.
-
-Includes an idempotent bootstrap helper to (re)register built-in nodes/backends
-after tests or callers clear registries.
-"""
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.registry import NodeRegistry
 
-# Import modules so class symbols are available.
-from vision_tools.nodes import detection
-from vision_tools.nodes import embedding
-from vision_tools.nodes import captioning
-from vision_tools.nodes import pose
-from vision_tools.nodes import remote_node
-
-from vision_tools.backends.detection import yolo
-from vision_tools.backends.detection import rtdetr
-from vision_tools.backends.embedding import siglip2
-from vision_tools.backends.embedding import clip
-from vision_tools.backends.captioning import smolvlm
-from vision_tools.backends.captioning import llamacpp
-from vision_tools.backends.pose import yolo_pose
-
 
 def register_all() -> None:
-    """Idempotently register all built-in nodes and backends."""
+    from vision_tools.nodes.io import remote_node
+    from vision_tools.nodes.logic import dynamic_logic_node
+    from vision_tools.nodes.model import captioning
+    from vision_tools.nodes.model import detection
+    from vision_tools.nodes.model import embedding
+    from vision_tools.nodes.model import pose
+    from vision_tools.nodes.state import buffer_node
+    from vision_tools.nodes.state import track_node
+    from vision_tools.nodes.utility import crop_node
+    from vision_tools.nodes.utility import filter_node
+
     NodeRegistry._registry["object_detector"] = detection.ObjectDetector
     NodeRegistry._categories["object_detector"] = "detection"
     NodeRegistry._registry["embedder"] = embedding.Embedder
@@ -34,7 +23,26 @@ def register_all() -> None:
     NodeRegistry._registry["pose_estimator"] = pose.PoseEstimator
     NodeRegistry._categories["pose_estimator"] = "pose"
     NodeRegistry._registry["remote"] = remote_node.RemoteNode
-    NodeRegistry._categories["remote"] = "infrastructure"
+    NodeRegistry._categories["remote"] = "io"
+    NodeRegistry._registry["dynamic_logic"] = dynamic_logic_node.DynamicLogicNode
+    NodeRegistry._categories["dynamic_logic"] = "logic"
+    NodeRegistry._registry["filter"] = filter_node.FilterNode
+    NodeRegistry._categories["filter"] = "canonical"
+    NodeRegistry._registry["track"] = track_node.TrackNode
+    NodeRegistry._categories["track"] = "canonical"
+    NodeRegistry._registry["crop"] = crop_node.CropNode
+    NodeRegistry._categories["crop"] = "canonical"
+    NodeRegistry._registry["buffer"] = buffer_node.BufferNode
+    NodeRegistry._categories["buffer"] = "canonical"
+
+    try:
+        from vision_tools.backends.detection import rtdetr
+        from vision_tools.backends.detection import yolo
+        from vision_tools.backends.embedding import clip, siglip2
+        from vision_tools.backends.captioning import llamacpp, smolvlm
+        from vision_tools.backends.pose import yolo_pose
+    except ImportError:
+        return
 
     BackendRegistry._registry[("detection", "yolo")] = yolo.YoloBackend
     BackendRegistry._registry[("detection", "rtdetr")] = rtdetr.RTDetrBackend
@@ -45,5 +53,4 @@ def register_all() -> None:
     BackendRegistry._registry[("pose", "yolo_pose")] = yolo_pose.YoloPoseBackend
 
 
-# Bootstrap on package import.
 register_all()

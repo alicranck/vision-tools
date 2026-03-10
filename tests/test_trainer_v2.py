@@ -1,6 +1,6 @@
 import asyncio
 
-from vision_tools.nodes.model_node import ModelNode
+from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.training.config import TrainConfig
 from vision_tools.training.dataset import VisionDataset
 from vision_tools.training.trainer import ToolTrainer

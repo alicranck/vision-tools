@@ -1,15 +1,5 @@
-"""
-StateManager re-export from runtime package.
+from vision_tools.runtime.model_cache import ModelCache
+from vision_tools.runtime.model_catalog import ModelCatalog, ResolvedModelSpec
+from vision_tools.runtime.model_resolver import ModelResolver
 
-Originally located at ``core/state_manager.py``, now re-exported here
-for architectural consistency (runtime services belong in runtime/).
-"""
-from vision_tools.core.state_manager import (
-    StateManager,
-    StateRule,
-    RuleType,
-    ZoneDefinition,
-    Alert,
-)
-
-__all__ = ["StateManager", "StateRule", "RuleType", "ZoneDefinition", "Alert"]
+__all__ = ["ModelCache", "ModelCatalog", "ModelResolver", "ResolvedModelSpec"]

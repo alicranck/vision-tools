@@ -8,7 +8,7 @@ from vision_tools.runtime.model_catalog import ModelCatalog
 
 
 def list_capabilities() -> dict[str, Any]:
-    """Expose discoverable tool/model capabilities for app-side orchestration."""
+    """Expose discoverable node/type/model capabilities for app-side orchestration."""
     return {
         "nodes": NodeRegistry.list_nodes(),
         "backends": BackendRegistry.list_backends(),
