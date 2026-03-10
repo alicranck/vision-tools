@@ -3,7 +3,6 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from vision_tools.core.graph_types import Detections, Track, Tracks
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.logic.logic_node import LogicNode
 
 
@@ -32,7 +31,6 @@ def _iou(a: list[float], b: list[float]) -> float:
     return inter_area / denom if denom > 0 else 0.0
 
 
-@NodeRegistry.register("track", category="canonical")
 class TrackNode(LogicNode):
     InputPorts = {"detections": "Detections"}
     OutputPorts = {"tracks": "Tracks"}

@@ -47,17 +47,21 @@ class BackendRegistry:
                 ...
         """
         def wrapper(backend_cls):
-            key = (task, model)
-            if key in cls._registry:
-                logger.warning(
-                    f"BackendRegistry: overwriting {key} "
-                    f"({cls._registry[key].__name__} → {backend_cls.__name__})"
-                )
-            cls._registry[key] = backend_cls
-            logger.debug(f"BackendRegistry: registered {key}")
+            cls.register_class(task, model, backend_cls)
             return backend_cls
 
         return wrapper
+
+    @classmethod
+    def register_class(cls, task: str, model: str, backend_cls) -> None:
+        key = (task, model)
+        if key in cls._registry:
+            logger.warning(
+                f"BackendRegistry: overwriting {key} "
+                f"({cls._registry[key].__name__} → {backend_cls.__name__})"
+            )
+        cls._registry[key] = backend_cls
+        logger.debug(f"BackendRegistry: registered {key}")
 
     @classmethod
     def get(cls, task: str, model: str) -> Any:

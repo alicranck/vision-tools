@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.graph_types import Embedding, Image
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.model.model_node import ModelNode
 
 
@@ -13,7 +12,6 @@ class EmbedderConfig(BaseModel):
     runtime: str = Field("auto", description="Runtime: 'auto', 'pytorch', 'openvino'")
 
 
-@NodeRegistry.register("embedder", category="embedding")
 class Embedder(ModelNode):
     InputPorts = {"image": "Image"}
     OutputPorts = {"embedding": "Embedding"}

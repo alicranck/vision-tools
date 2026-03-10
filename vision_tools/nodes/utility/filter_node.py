@@ -3,7 +3,6 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, model_validator
 
 from vision_tools.core.graph_types import Detections
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.logic.logic_node import LogicNode
 
 
@@ -23,7 +22,6 @@ class FilterNodeConfig(BaseModel):
         return self
 
 
-@NodeRegistry.register("filter", category="canonical")
 class FilterNode(LogicNode):
     InputPorts = {"detections": "Detections"}
     OutputPorts = {"detections": "Detections"}

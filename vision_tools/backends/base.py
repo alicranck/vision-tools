@@ -37,7 +37,7 @@ class Backend(Protocol):
     Backends encapsulate model-specific operations:
     - **load_model**: Load a model from disk into memory.
     - **infer**: Run raw model inference.
-    - **postprocess**: Convert raw model output into a schema-compatible dict.
+    - **postprocess**: Convert raw model output into typed port-compatible values.
     - **get_available_runtimes**: Report supported runtimes for introspection.
 
     Backends are *implementation details* — the pipeline never interacts
@@ -70,14 +70,14 @@ class Backend(Protocol):
         ...
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Convert raw model output into a schema-compatible dict.
+        """Convert raw model output into a typed output-port dict.
 
         Args:
             raw_output: Raw output from ``infer``.
             context: Runtime context with frame metadata.
 
         Returns:
-            Dict that validates against the task node's ``OutputSchema``.
+            Dict that validates against the task node's declared output ports.
         """
         ...
 

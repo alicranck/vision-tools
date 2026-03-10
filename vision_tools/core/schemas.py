@@ -250,4 +250,4 @@ class BatchPayload(BaseModel):
         return len(self.frames)
 
 
-# ToolIOContract has been removed in v2 — replaced by Node.InputSchema / OutputSchema
+# ToolIOContract has been removed in v2 — replaced by typed input/output port contracts.

@@ -4,17 +4,18 @@ from typing import Any
 
 from vision_tools.core.graph_types import FrameInfo, Image
 from vision_tools.core.node import Node, NodeContext
+from vision_tools.core.sources import SOURCE_NODE_ID, get_source_ports
 from vision_tools.core.type_refs import TypeRegistry
 from vision_tools.pipeline.graph import DAG
 from vision_tools.pipeline.refs import parse_port_ref
-from vision_tools.pipeline.validator import INPUT_PORTS
+
+SOURCE_PORTS = get_source_ports()
 
 
 class PipelineExecutor:
-    def __init__(self, dag: DAG, nodes: dict[str, Node], max_workers: int = 1) -> None:
+    def __init__(self, dag: DAG, nodes: dict[str, Node]) -> None:
         self.dag = dag
         self.nodes = nodes
-        self.max_workers = max_workers
 
     def _build_context(self, frame: Any, context: NodeContext | None = None) -> NodeContext:
         context = context or NodeContext()
@@ -42,13 +43,13 @@ class PipelineExecutor:
             channels = int(frame.shape[2]) if len(frame.shape) > 2 else 1
 
         return TypeRegistry.validate(
-            INPUT_PORTS["image"],
+            SOURCE_PORTS["image"],
             Image(data=frame, width=width, height=height, channels=channels),
         )
 
     def _build_frame_info(self, context: NodeContext) -> FrameInfo:
         return TypeRegistry.validate(
-            INPUT_PORTS["frame_info"],
+            SOURCE_PORTS["frame_info"],
             FrameInfo(
                 frame_idx=context.frame_idx,
                 timestamp=context.timestamp,
@@ -61,8 +62,8 @@ class PipelineExecutor:
     def run(self, frame: Any, context: NodeContext | None = None) -> dict[str, Any]:
         base_context = self._build_context(frame, context)
         port_values: dict[str, Any] = {
-            "input.image": self._build_image(frame, base_context),
-            "input.frame_info": self._build_frame_info(base_context),
+            f"{SOURCE_NODE_ID}.image": self._build_image(frame, base_context),
+            f"{SOURCE_NODE_ID}.frame_info": self._build_frame_info(base_context),
         }
 
         for node_id in self.dag.execution_order():
@@ -83,11 +84,9 @@ class PipelineExecutor:
                 continue
 
             frame_context = base_context.model_copy(update={"port_values": dict(port_values)})
-            validated_inputs = node.validate_inputs(inputs)
-            outputs = node.process(validated_inputs, frame_context)
-            validated_outputs = node.validate_outputs(outputs)
+            outputs = node.process(inputs, frame_context)
 
-            for port_name, value in validated_outputs.items():
+            for port_name, value in outputs.items():
                 port_values[f"{node_id}.{port_name}"] = value
 
         if self.dag.config.outputs:

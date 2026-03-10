@@ -35,7 +35,7 @@ from vision_tools.core.graph_types import (
 from vision_tools.core.node import Node, NodeContext, NodeState
 from vision_tools.core.registry import NodeRegistry
 from vision_tools.core.schemas import BatchPayload, FrameMetadata, FrameResult
-from vision_tools.nodes.io.remote_node import RemoteNode
+from vision_tools.core.sources import SOURCE_NODE_ID, get_source_ports
 from vision_tools.nodes.logic.dynamic_logic_node import DynamicLogicNode
 from vision_tools.nodes.logic.logic_node import LogicNode
 from vision_tools.nodes.model.captioning import Captioner

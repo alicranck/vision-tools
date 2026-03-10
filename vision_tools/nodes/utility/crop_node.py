@@ -5,7 +5,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from vision_tools.core.graph_types import Crop, Crops, Detections, Image, Tracks
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.logic.logic_node import LogicNode
 
 
@@ -15,7 +14,6 @@ class CropNodeConfig(BaseModel):
     skip_invalid_boxes: bool = True
 
 
-@NodeRegistry.register("crop", category="canonical")
 class CropNode(LogicNode):
     InputPorts = {"image": "Image", "regions": "Detections | Tracks"}
     OutputPorts = {"crops": "Crops"}

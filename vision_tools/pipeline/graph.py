@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 
 from vision_tools.core.config import PipelineConfig
+from vision_tools.core.sources import SOURCE_NODE_ID
 from vision_tools.pipeline.refs import parse_port_ref
 
 
@@ -30,7 +31,7 @@ class DAG:
             deps: list[str] = []
             for binding in node.inputs.values():
                 producer_id, _ = parse_port_ref(binding)
-                if producer_id == "input":
+                if producer_id == SOURCE_NODE_ID:
                     continue
                 if producer_id not in self.nodes:
                     raise ValueError(

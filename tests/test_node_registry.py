@@ -25,16 +25,20 @@ def test_builtin_nodes_registered():
     assert "crop" in names
     assert "buffer" in names
     assert "dynamic_logic" in names
+    assert "remote" not in names
 
 
 def test_registry_metadata_exposes_ports():
     metadata = {entry["type"]: entry for entry in NodeRegistry.list_nodes()}
+    sources = {entry["type"]: entry for entry in NodeRegistry.list_sources()}
     assert metadata["filter"]["input_ports"]["detections"] == "Detections"
     assert metadata["track"]["output_ports"]["tracks"] == "Tracks"
     assert metadata["embedder"]["output_ports"]["embedding"] == "Embedding"
     assert metadata["captioner"]["output_ports"]["caption"] == "Caption"
     assert metadata["pose_estimator"]["output_ports"]["poses"] == "Poses"
     assert metadata["dynamic_logic"]["dynamic_ports"] is True
+    assert sources["input"]["output_ports"]["image"] == "Image"
+    assert sources["input"]["executable"] is False
 
 
 def test_registry_create_filter():

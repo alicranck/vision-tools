@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from vision_tools.core.graph_types import History
 from vision_tools.core.node import NodeContext
-from vision_tools.core.registry import NodeRegistry
+from vision_tools.core.sources import SOURCE_NODE_ID
 from vision_tools.core.type_refs import GenericTypeRef, PortTypeRef, parse_type_ref
 from vision_tools.nodes.logic.logic_node import LogicNode
 
@@ -18,7 +18,6 @@ class BufferNodeConfig(BaseModel):
     emit_on_empty: bool = True
 
 
-@NodeRegistry.register("buffer", category="canonical")
 class BufferNode(LogicNode):
     def __init__(self, node_id: str, config: dict | None = None) -> None:
         validated = BufferNodeConfig.model_validate(config or {})
@@ -39,7 +38,7 @@ class BufferNode(LogicNode):
         if not binding:
             return
         producer_id, producer_port = binding.split(".", 1)
-        if producer_id == "input":
+        if producer_id == SOURCE_NODE_ID:
             raise ValueError("BufferNode cannot buffer input ports in phase 1.")
         producer = nodes[producer_id]
         source_type = producer.get_output_ports()[producer_port]

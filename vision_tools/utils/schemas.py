@@ -31,9 +31,8 @@ from vision_tools.core.schemas import (  # noqa: F401
 
 # Deprecated stub — kept for backward compat with BaseVisionTool (removed in Stage 6)
 class ToolIOContract(BaseModel):
-    """Deprecated: use Node.InputSchema / OutputSchema instead."""
+    """Deprecated: use typed input/output port contracts instead."""
     key: str = Field(..., description="Key name in FrameResult.results")
     schema_type: str = Field(..., description="Fully qualified schema class name")
     required: bool = Field(False, description="Whether this input is mandatory")
     description: str = Field("", description="Human-readable description")
-

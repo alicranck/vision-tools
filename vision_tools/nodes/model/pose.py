@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.graph_types import Keypoint, PoseKeypoints, Poses
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.model.model_node import ModelNode
 
 
@@ -15,7 +14,6 @@ class PoseEstimatorConfig(BaseModel):
     conf_threshold: float = Field(0.5, ge=0.0, le=1.0, description="Confidence threshold")
 
 
-@NodeRegistry.register("pose_estimator", category="pose")
 class PoseEstimator(ModelNode):
     InputPorts = {"image": "Image"}
     OutputPorts = {"poses": "Poses"}

@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.graph_types import Caption
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.model.model_node import ModelNode
 
 
@@ -15,7 +14,6 @@ class CaptionerConfig(BaseModel):
     max_tokens: int = Field(64, description="Max tokens to generate")
 
 
-@NodeRegistry.register("captioner", category="captioning")
 class Captioner(ModelNode):
     InputPorts = {"image": "Image"}
     OutputPorts = {"caption": "Caption"}

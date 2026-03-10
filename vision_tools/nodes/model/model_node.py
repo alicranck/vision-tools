@@ -104,8 +104,7 @@ class ModelNode(Node):
                 raise TypeError(f"{self.node_id}: expected a dict of named inputs.")
             inputs = {next(iter(self.get_input_ports())): inputs}
 
-        validated_inputs = self.validate_inputs(inputs)
-        model_inputs = self.preprocess(validated_inputs, context)
+        model_inputs = self.preprocess(inputs, context)
         if hasattr(self.backend, "preprocess"):
             model_inputs = self.backend.preprocess(model_inputs)
 

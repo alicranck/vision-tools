@@ -17,8 +17,7 @@ class LogicNode(Node):
                 raise TypeError(f"{self.node_id}: expected a dict of named inputs.")
             inputs = {next(iter(self.get_input_ports())): inputs}
 
-        validated_inputs = self.validate_inputs(inputs)
-        outputs = self.execute(validated_inputs, context)
+        outputs = self.execute(inputs, context)
         return self.validate_outputs(outputs)
 
     @abstractmethod

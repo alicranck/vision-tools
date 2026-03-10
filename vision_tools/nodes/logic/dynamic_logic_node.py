@@ -5,7 +5,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from vision_tools.core.node import NodeContext
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.core.type_refs import PortTypeRef, TypeRegistry, parse_type_ref
 from vision_tools.nodes.logic.logic_node import LogicNode
 
@@ -17,7 +16,6 @@ class DynamicLogicConfig(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
-@NodeRegistry.register("dynamic_logic", category="logic")
 class DynamicLogicNode(LogicNode):
     DynamicPorts = True
 

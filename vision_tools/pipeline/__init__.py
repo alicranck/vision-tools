@@ -28,7 +28,6 @@ class Pipeline:
         self._executor = PipelineExecutor(
             dag=self.dag,
             nodes=self._nodes,
-            max_workers=self._execution.max_workers,
         )
 
     def load(self) -> None:

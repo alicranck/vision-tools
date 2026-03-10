@@ -1,4 +1,3 @@
-from vision_tools.nodes.io.input_node import InputNode
-from vision_tools.nodes.io.remote_node import RemoteNode, RemoteNodeConfig
+from vision_tools.core.sources import SOURCE_NODE_ID, get_source_ports, list_sources
 
-__all__ = ["InputNode", "RemoteNode", "RemoteNodeConfig"]
+__all__ = ["SOURCE_NODE_ID", "get_source_ports", "list_sources"]

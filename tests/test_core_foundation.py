@@ -41,9 +41,18 @@ def test_node_state_values():
 
 def test_node_metadata_uses_ports():
     metadata = ConcreteNode.get_metadata()
+    assert metadata["summary"] == "ConcreteNode"
     assert metadata["input_ports"]["detections"] == "Detections"
     assert metadata["output_ports"]["detections"] == "Detections"
     assert metadata["dynamic_ports"] is False
+
+
+def test_node_registry_lists_builtin_sources():
+    sources = NodeRegistry.list_sources()
+    assert len(sources) == 1
+    assert sources[0]["type"] == "input"
+    assert sources[0]["output_ports"]["image"] == "Image"
+    assert sources[0]["output_ports"]["frame_info"] == "FrameInfo"
 
 
 def test_type_ref_parsing():
@@ -92,5 +101,4 @@ def test_pipeline_config_serialization():
 def test_execution_config_defaults():
     cfg = ExecutionConfig()
     assert cfg.mode == "sequential"
-    assert cfg.max_workers == 1
     assert cfg.verify_on_init is False

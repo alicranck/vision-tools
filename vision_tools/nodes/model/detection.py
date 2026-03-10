@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.config import DeviceTarget, InferenceTask, ModelIntent, ModelSize
 from vision_tools.core.graph_types import BoundingBox, Detections
-from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.runtime.model_catalog import ModelCatalog
 
@@ -23,7 +22,6 @@ class ObjectDetectorConfig(BaseModel):
     prompt_free: bool = False
 
 
-@NodeRegistry.register("object_detector", category="detection")
 class ObjectDetector(ModelNode):
     InputPorts = {"image": "Image"}
     OutputPorts = {"detections": "Detections"}

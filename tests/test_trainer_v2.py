@@ -21,9 +21,6 @@ class _StubBackend:
 
 
 class _TrainableNode(ModelNode):
-    OutputSchema = None
-    InputSchema = None
-
     def __init__(self):
         super().__init__(
             node_id="train_node",

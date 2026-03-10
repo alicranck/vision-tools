@@ -4,6 +4,7 @@ import logging
 from typing import Any, Type
 
 from vision_tools.core.node import Node
+from vision_tools.core.sources import list_sources
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +16,22 @@ class NodeRegistry:
     @classmethod
     def register(cls, name: str, category: str = "general"):
         def wrapper(node_cls: Type[Node]) -> Type[Node]:
-            if name in cls._registry:
-                logger.warning(
-                    "NodeRegistry: overwriting existing registration for '%s' (%s -> %s)",
-                    name,
-                    cls._registry[name].__name__,
-                    node_cls.__name__,
-                )
-            cls._registry[name] = node_cls
-            cls._categories[name] = category
+            cls.register_class(name, node_cls, category)
             return node_cls
 
         return wrapper
+
+    @classmethod
+    def register_class(cls, name: str, node_cls: Type[Node], category: str = "general") -> None:
+        if name in cls._registry:
+            logger.warning(
+                "NodeRegistry: overwriting existing registration for '%s' (%s -> %s)",
+                name,
+                cls._registry[name].__name__,
+                node_cls.__name__,
+            )
+        cls._registry[name] = node_cls
+        cls._categories[name] = category
 
     @classmethod
     def list_nodes(cls) -> list[dict[str, Any]]:
@@ -38,6 +43,10 @@ class NodeRegistry:
             }
             for name, node_cls in cls._registry.items()
         ]
+
+    @classmethod
+    def list_sources(cls) -> list[dict[str, Any]]:
+        return list_sources()
 
     @classmethod
     def get(cls, name: str) -> Type[Node]:

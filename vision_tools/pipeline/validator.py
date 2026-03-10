@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from vision_tools.core.graph_types import FrameInfo, Image
 from vision_tools.core.node import Node
-from vision_tools.core.type_refs import SimpleTypeRef, TypeRegistry, serialize_type_ref
+from vision_tools.core.sources import SOURCE_NODE_ID, get_source_ports
+from vision_tools.core.type_refs import TypeRegistry, serialize_type_ref
 from vision_tools.pipeline.graph import DAG
 from vision_tools.pipeline.refs import parse_port_ref
 
@@ -11,10 +11,7 @@ class SchemaValidationError(Exception):
     pass
 
 
-INPUT_PORTS = {
-    "image": SimpleTypeRef("Image"),
-    "frame_info": SimpleTypeRef("FrameInfo"),
-}
+SOURCE_PORTS = get_source_ports()
 
 
 class SchemaValidator:
@@ -52,8 +49,8 @@ class SchemaValidator:
                     errors.append(str(exc))
                     continue
 
-                producer_ports = INPUT_PORTS if producer_id == "input" else None
-                if producer_id != "input":
+                producer_ports = SOURCE_PORTS if producer_id == SOURCE_NODE_ID else None
+                if producer_id != SOURCE_NODE_ID:
                     producer = nodes.get(producer_id)
                     if producer is None:
                         errors.append(
@@ -90,8 +87,8 @@ class SchemaValidator:
                 errors.append(f"Output '{output_name}' invalid: {exc}")
                 continue
 
-            if producer_id == "input":
-                if producer_port not in INPUT_PORTS:
+            if producer_id == SOURCE_NODE_ID:
+                if producer_port not in SOURCE_PORTS:
                     errors.append(
                         f"Output '{output_name}' references unknown input port '{binding}'."
                     )

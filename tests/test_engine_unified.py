@@ -1,5 +1,6 @@
 import numpy as np
 
+from vision_tools.core.graph_types import Alerts
 from vision_tools.engine.video_engine import VideoInferenceEngine
 from vision_tools.utils.schemas import BatchPayload, FrameMetadata
 
@@ -47,3 +48,14 @@ def test_engine_process_batch_legacy_pipeline_passthrough():
     payload = _build_payload()
     processed = engine._process_batch(payload)
     assert processed is payload
+
+
+def test_engine_process_batch_serializes_typed_outputs():
+    class _TypedPipelineStub:
+        def run_batch(self, frames):
+            return [{"alerts": Alerts(items=[])} for _ in frames]
+
+    engine = VideoInferenceEngine(_TypedPipelineStub(), video_path="dummy.mp4")
+    payload = _build_payload()
+    processed = engine._process_batch(payload)
+    assert processed.frame_results[0].results["alerts"] == {"items": []}

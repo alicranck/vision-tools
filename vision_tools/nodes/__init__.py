@@ -1,56 +1,54 @@
+from __future__ import annotations
+
+import logging
+from importlib import import_module
+
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.registry import NodeRegistry
 
+logger = logging.getLogger(__name__)
+
+
+NODE_SPECS = [
+    ("object_detector", "model", "vision_tools.nodes.model.detection", "ObjectDetector"),
+    ("embedder", "model", "vision_tools.nodes.model.embedding", "Embedder"),
+    ("captioner", "model", "vision_tools.nodes.model.captioning", "Captioner"),
+    ("pose_estimator", "model", "vision_tools.nodes.model.pose", "PoseEstimator"),
+    ("dynamic_logic", "logic", "vision_tools.nodes.logic.dynamic_logic_node", "DynamicLogicNode"),
+    ("filter", "utility", "vision_tools.nodes.utility.filter_node", "FilterNode"),
+    ("track", "state", "vision_tools.nodes.state.track_node", "TrackNode"),
+    ("crop", "utility", "vision_tools.nodes.utility.crop_node", "CropNode"),
+    ("buffer", "state", "vision_tools.nodes.state.buffer_node", "BufferNode"),
+]
+
+BACKEND_SPECS = [
+    ("detection", "yolo", "vision_tools.backends.detection.yolo", "YoloBackend"),
+    ("detection", "rtdetr", "vision_tools.backends.detection.rtdetr", "RTDetrBackend"),
+    ("embedding", "siglip2", "vision_tools.backends.embedding.siglip2", "SigLIP2Backend"),
+    ("embedding", "clip", "vision_tools.backends.embedding.clip", "CLIPBackend"),
+    ("captioning", "smolvlm", "vision_tools.backends.captioning.smolvlm", "SmolVLMBackend"),
+    ("captioning", "llamacpp", "vision_tools.backends.captioning.llamacpp", "LlamaCppBackend"),
+    ("pose", "yolo_pose", "vision_tools.backends.pose.yolo_pose", "YoloPoseBackend"),
+]
+
 
 def register_all() -> None:
-    from vision_tools.nodes.io import remote_node
-    from vision_tools.nodes.logic import dynamic_logic_node
-    from vision_tools.nodes.model import captioning
-    from vision_tools.nodes.model import detection
-    from vision_tools.nodes.model import embedding
-    from vision_tools.nodes.model import pose
-    from vision_tools.nodes.state import buffer_node
-    from vision_tools.nodes.state import track_node
-    from vision_tools.nodes.utility import crop_node
-    from vision_tools.nodes.utility import filter_node
+    for name, category, module_name, class_name in NODE_SPECS:
+        module = import_module(module_name)
+        NodeRegistry.register_class(name, getattr(module, class_name), category=category)
 
-    NodeRegistry._registry["object_detector"] = detection.ObjectDetector
-    NodeRegistry._categories["object_detector"] = "model"
-    NodeRegistry._registry["embedder"] = embedding.Embedder
-    NodeRegistry._categories["embedder"] = "model"
-    NodeRegistry._registry["captioner"] = captioning.Captioner
-    NodeRegistry._categories["captioner"] = "model"
-    NodeRegistry._registry["pose_estimator"] = pose.PoseEstimator
-    NodeRegistry._categories["pose_estimator"] = "model"
-    NodeRegistry._registry["remote"] = remote_node.RemoteNode
-    NodeRegistry._categories["remote"] = "io"
-    NodeRegistry._registry["dynamic_logic"] = dynamic_logic_node.DynamicLogicNode
-    NodeRegistry._categories["dynamic_logic"] = "logic"
-    NodeRegistry._registry["filter"] = filter_node.FilterNode
-    NodeRegistry._categories["filter"] = "utility"
-    NodeRegistry._registry["track"] = track_node.TrackNode
-    NodeRegistry._categories["track"] = "state"
-    NodeRegistry._registry["crop"] = crop_node.CropNode
-    NodeRegistry._categories["crop"] = "utility"
-    NodeRegistry._registry["buffer"] = buffer_node.BufferNode
-    NodeRegistry._categories["buffer"] = "state"
-
-    try:
-        from vision_tools.backends.detection import rtdetr
-        from vision_tools.backends.detection import yolo
-        from vision_tools.backends.embedding import clip, siglip2
-        from vision_tools.backends.captioning import llamacpp, smolvlm
-        from vision_tools.backends.pose import yolo_pose
-    except ImportError:
-        return
-
-    BackendRegistry._registry[("detection", "yolo")] = yolo.YoloBackend
-    BackendRegistry._registry[("detection", "rtdetr")] = rtdetr.RTDetrBackend
-    BackendRegistry._registry[("embedding", "siglip2")] = siglip2.SigLIP2Backend
-    BackendRegistry._registry[("embedding", "clip")] = clip.CLIPBackend
-    BackendRegistry._registry[("captioning", "smolvlm")] = smolvlm.SmolVLMBackend
-    BackendRegistry._registry[("captioning", "llamacpp")] = llamacpp.LlamaCppBackend
-    BackendRegistry._registry[("pose", "yolo_pose")] = yolo_pose.YoloPoseBackend
+    for task, model, module_name, class_name in BACKEND_SPECS:
+        try:
+            module = import_module(module_name)
+        except ImportError as exc:
+            logger.info(
+                "Skipping optional backend registration for %s:%s: %s",
+                task,
+                model,
+                exc,
+            )
+            continue
+        BackendRegistry.register_class(task, model, getattr(module, class_name))
 
 
 register_all()

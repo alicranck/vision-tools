@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, ClassVar, Optional, Type
+from typing import Any, ClassVar, Type
 
 from pydantic import BaseModel, Field
 
@@ -34,9 +34,6 @@ class NodeContext(BaseModel):
 
 
 class Node(ABC):
-    InputSchema: ClassVar[Optional[Type[BaseModel]]] = None
-    OutputSchema: ClassVar[Optional[Type[BaseModel]]] = None
-
     InputPorts: ClassVar[dict[str, str | PortTypeRef]] = {}
     OutputPorts: ClassVar[dict[str, str | PortTypeRef]] = {}
     DynamicPorts: ClassVar[bool] = False
@@ -93,16 +90,24 @@ class Node(ABC):
         }
 
     @classmethod
-    def get_config_schema(cls) -> Optional[Type[BaseModel]]:
+    def get_config_schema(cls) -> Type[BaseModel] | None:
         return None
 
     @classmethod
-    def get_config_options(cls) -> Optional[dict[str, Any]]:
+    def get_config_options(cls) -> dict[str, Any] | None:
         return None
+
+    @classmethod
+    def get_summary(cls) -> str:
+        doc = (cls.__doc__ or "").strip()
+        if not doc:
+            return cls.__name__
+        return doc.splitlines()[0].strip()
 
     @classmethod
     def get_metadata(cls) -> dict[str, Any]:
         return {
+            "summary": cls.get_summary(),
             "description": cls.__doc__ or "",
             "input_ports": {
                 name: serialize_type_ref(type_ref)

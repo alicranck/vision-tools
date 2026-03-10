@@ -52,7 +52,6 @@ class ModelIntent(BaseModel):
 
 class ExecutionConfig(BaseModel):
     mode: str = Field("sequential", pattern=r"^sequential$")
-    max_workers: int = Field(1, ge=1, le=32)
     warmup_rounds: int = Field(0, ge=0)
     verify_on_init: bool = False
 
