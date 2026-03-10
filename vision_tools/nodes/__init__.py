@@ -15,25 +15,25 @@ def register_all() -> None:
     from vision_tools.nodes.utility import filter_node
 
     NodeRegistry._registry["object_detector"] = detection.ObjectDetector
-    NodeRegistry._categories["object_detector"] = "detection"
+    NodeRegistry._categories["object_detector"] = "model"
     NodeRegistry._registry["embedder"] = embedding.Embedder
-    NodeRegistry._categories["embedder"] = "embedding"
+    NodeRegistry._categories["embedder"] = "model"
     NodeRegistry._registry["captioner"] = captioning.Captioner
-    NodeRegistry._categories["captioner"] = "captioning"
+    NodeRegistry._categories["captioner"] = "model"
     NodeRegistry._registry["pose_estimator"] = pose.PoseEstimator
-    NodeRegistry._categories["pose_estimator"] = "pose"
+    NodeRegistry._categories["pose_estimator"] = "model"
     NodeRegistry._registry["remote"] = remote_node.RemoteNode
     NodeRegistry._categories["remote"] = "io"
     NodeRegistry._registry["dynamic_logic"] = dynamic_logic_node.DynamicLogicNode
     NodeRegistry._categories["dynamic_logic"] = "logic"
     NodeRegistry._registry["filter"] = filter_node.FilterNode
-    NodeRegistry._categories["filter"] = "canonical"
+    NodeRegistry._categories["filter"] = "utility"
     NodeRegistry._registry["track"] = track_node.TrackNode
-    NodeRegistry._categories["track"] = "canonical"
+    NodeRegistry._categories["track"] = "state"
     NodeRegistry._registry["crop"] = crop_node.CropNode
-    NodeRegistry._categories["crop"] = "canonical"
+    NodeRegistry._categories["crop"] = "utility"
     NodeRegistry._registry["buffer"] = buffer_node.BufferNode
-    NodeRegistry._categories["buffer"] = "canonical"
+    NodeRegistry._categories["buffer"] = "state"
 
     try:
         from vision_tools.backends.detection import rtdetr
