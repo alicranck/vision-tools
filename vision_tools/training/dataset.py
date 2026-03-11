@@ -14,11 +14,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
+import shutil
+import tempfile
+from collections import defaultdict
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from .annotations import AnnotatedFrame
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,8 @@ class VisionDataset:
         self.format = format or self._detect_format()
         self._metadata: Dict[str, Any] = {}
         self._splits: Dict[str, DatasetSplit] = {}
+        self._task_refs: Dict[str, str] = {}
+        self._entries: List[tuple[str, "AnnotatedFrame"]] | None = None
         
         # Lazy load metadata on first access
         self._loaded = False
@@ -187,6 +196,35 @@ class VisionDataset:
             return self._metadata.get('yaml_path', str(self.path))
         return str(self.path)
 
+    def materialize_for_task(self, task: str) -> str:
+        """Return a framework-ready dataset ref for the requested task.
+
+        Path-backed datasets are returned directly. Entry-backed datasets are
+        materialized lazily inside the dataset root so each backend can request
+        the representation it needs without app-side export branching.
+        """
+        normalized = task.strip().lower()
+        cached = self._task_refs.get(normalized)
+        if cached:
+            return cached
+
+        if self._entries is None:
+            ref = self.get_ref()
+            self._task_refs[normalized] = ref
+            return ref
+
+        if normalized in {"detection", "open_vocab_detection"}:
+            ref = self._materialize_yolo_detection_dataset(segmentation=False)
+        elif normalized == "segmentation":
+            ref = self._materialize_yolo_detection_dataset(segmentation=True)
+        elif normalized == "classification":
+            ref = self._materialize_yolo_classification_dataset()
+        else:
+            raise ValueError(f"Unsupported task materialization request: {task!r}")
+
+        self._task_refs[normalized] = ref
+        return ref
+
     def validate_for_tool(self, tool_type: str) -> List[str]:
         """
         Check if this dataset is compatible with a given tool type.
@@ -198,11 +236,176 @@ class VisionDataset:
         if self.num_images == 0:
             errors.append("Dataset contains no images")
         
-        if tool_type in ('ov_detection', 'pose_estimation', 'object_detector', 'pose_estimator'):
-            if self.format not in (DatasetFormat.YOLO, DatasetFormat.COCO):
+        detection_like_tools = {
+            "ov_detection",
+            "open_vocab_detector",
+            "object_detector",
+            "detector",
+            "pose_estimation",
+            "pose_estimator",
+            "segmenter",
+        }
+        if tool_type in detection_like_tools:
+            if self.format not in (DatasetFormat.YOLO, DatasetFormat.COCO) and self._entries is None:
                 errors.append(f"Detection/pose tools require YOLO or COCO format, got {self.format}")
         
         return errors
+
+    # ------------------------------------------------------------------
+    # Factory: build from in-memory entries (DB → VisionDataset)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_entries(
+        cls,
+        entries: List[tuple[str, "AnnotatedFrame"]],
+        name: str = "dataset",
+        val_split: float = 0.2,
+        output_dir: Optional[str] = None,
+    ) -> "VisionDataset":
+        """Build a VisionDataset from in-memory annotated entries.
+
+        Writes YOLO-format files to *output_dir* (or a temp directory) so
+        that existing training backends (Ultralytics etc.) work unchanged.
+
+        Args:
+            entries: List of (image_path, annotated_frame) tuples.
+            name: Human-readable dataset name.
+            val_split: Fraction of entries to use as validation set.
+            output_dir: Where to write the YOLO dataset.  If ``None`` a
+                temporary directory is created (caller owns cleanup).
+
+        Returns:
+            A VisionDataset pointing at the generated ``data.yaml``.
+        """
+        from .annotations import AnnotatedFrame  # noqa: F811
+
+        if not entries:
+            raise ValueError("Cannot build VisionDataset from empty entries")
+
+        # Resolve output directory
+        if output_dir is None:
+            output_dir = tempfile.mkdtemp(prefix=f"vt_dataset_{name}_")
+        root = Path(output_dir)
+        dataset = cls(path=str(root), format=DatasetFormat.CUSTOM, name=name)
+        dataset._entries = list(entries)
+
+        class_names = sorted(
+            {ann.class_name for _, af in entries for ann in af.annotations}
+            | {label for _, af in entries for label in af.labels}
+        )
+        dataset._metadata = {
+            "num_images": len(entries),
+            "classes": class_names,
+            "output_dir": str(root),
+        }
+        dataset._splits["train"] = DatasetSplit(images_dir=str(root), num_images=len(entries))
+        dataset._loaded = True
+        dataset._task_refs = {}
+        return dataset
+
+    def _ensure_entries(self) -> List[tuple[str, "AnnotatedFrame"]]:
+        if self._entries is None:
+            raise ValueError("This dataset is not entry-backed.")
+        return self._entries
+
+    def _split_entries(self) -> tuple[list[int], set[int]]:
+        entries = self._ensure_entries()
+        indices = list(range(len(entries)))
+        random.shuffle(indices)
+        val_count = max(1, int(len(entries) * 0.2)) if len(entries) > 1 else 0
+        return indices, set(indices[:val_count])
+
+    def _materialize_yolo_detection_dataset(self, segmentation: bool) -> str:
+        entries = self._ensure_entries()
+        root = self.path / ("segmentation" if segmentation else "detection")
+        indices, val_indices = self._split_entries()
+        _ = indices
+
+        class_names = sorted({ann.class_name for _, af in entries for ann in af.annotations})
+        class_to_id = {name: idx for idx, name in enumerate(class_names)}
+
+        for split in ("train", "val"):
+            (root / "images" / split).mkdir(parents=True, exist_ok=True)
+            (root / "labels" / split).mkdir(parents=True, exist_ok=True)
+
+        for idx, (image_path, annotated_frame) in enumerate(entries):
+            split = "val" if idx in val_indices else "train"
+            src = Path(image_path)
+            ext = src.suffix or ".jpg"
+            dst_name = f"{idx:06d}{ext}"
+            dst_img = root / "images" / split / dst_name
+            if src.exists():
+                try:
+                    if dst_img.exists() or dst_img.is_symlink():
+                        dst_img.unlink()
+                    dst_img.symlink_to(src.resolve())
+                except OSError:
+                    shutil.copy2(src, dst_img)
+            else:
+                logger.warning("Image not found, skipping: %s", image_path)
+                continue
+
+            label_path = root / "labels" / split / f"{idx:06d}.txt"
+            lines: list[str] = []
+            for ann in annotated_frame.annotations:
+                cid = class_to_id[ann.class_name]
+                if segmentation:
+                    lines.append(ann.to_yolo_segment_line(cid))
+                elif ann.is_rectangle:
+                    lines.append(ann.to_yolo_bbox_line(cid))
+                else:
+                    lines.append(ann.to_yolo_segment_line(cid))
+            label_path.write_text("\n".join(lines) + "\n" if lines else "")
+
+        yaml_path = root / "data.yaml"
+        import yaml
+
+        yaml_path.write_text(
+            yaml.dump(
+                {
+                    "path": str(root),
+                    "train": "images/train",
+                    "val": "images/val",
+                    "nc": len(class_names),
+                    "names": class_names,
+                },
+                default_flow_style=False,
+            )
+        )
+        return str(yaml_path)
+
+    def _materialize_yolo_classification_dataset(self) -> str:
+        entries = self._ensure_entries()
+        root = self.path / "classification"
+        indices, val_indices = self._split_entries()
+        _ = indices
+
+        labels = sorted({label for _, frame in entries for label in frame.labels})
+        if not labels:
+            raise ValueError("Classification training requires image-level labels.")
+
+        for split in ("train", "val"):
+            for label in labels:
+                (root / split / label).mkdir(parents=True, exist_ok=True)
+
+        for idx, (image_path, frame) in enumerate(entries):
+            if not frame.labels:
+                continue
+            label = frame.labels[0]
+            split = "val" if idx in val_indices else "train"
+            src = Path(image_path)
+            ext = src.suffix or ".jpg"
+            dst = root / split / label / f"{idx:06d}{ext}"
+            if src.exists():
+                try:
+                    if dst.exists() or dst.is_symlink():
+                        dst.unlink()
+                    dst.symlink_to(src.resolve())
+                except OSError:
+                    shutil.copy2(src, dst)
+
+        return str(root)
 
     def __repr__(self) -> str:
         return (

@@ -39,10 +39,12 @@ from vision_tools.core.sources import SOURCE_NODE_ID, get_source_ports
 from vision_tools.nodes.logic.dynamic_logic_node import DynamicLogicNode
 from vision_tools.nodes.logic.logic_node import LogicNode
 from vision_tools.nodes.model.captioning import Captioner
-from vision_tools.nodes.model.detection import ObjectDetector
+from vision_tools.nodes.model.classification import Classifier
+from vision_tools.nodes.model.detection import Detector, ObjectDetector, OpenVocabularyDetector
 from vision_tools.nodes.model.embedding import Embedder
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.nodes.model.pose import PoseEstimator
+from vision_tools.nodes.model.segmentation import Segmenter
 from vision_tools.nodes.state.buffer_node import BufferNode
 from vision_tools.nodes.state.track_node import TrackNode
 from vision_tools.nodes.utility.crop_node import CropNode

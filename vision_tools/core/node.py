@@ -106,7 +106,7 @@ class Node(ABC):
 
     @classmethod
     def get_metadata(cls) -> dict[str, Any]:
-        return {
+        metadata = {
             "summary": cls.get_summary(),
             "description": cls.__doc__ or "",
             "input_ports": {
@@ -125,6 +125,14 @@ class Node(ABC):
             ),
             "config_options": cls.get_config_options(),
         }
+        training_metadata = cls.get_training_metadata()
+        if training_metadata is not None:
+            metadata["training"] = training_metadata
+        return metadata
+
+    @classmethod
+    def get_training_metadata(cls) -> dict[str, Any] | None:
+        return None
 
     def __repr__(self) -> str:
         return (

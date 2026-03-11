@@ -106,9 +106,7 @@ class ToolTrainer:
             )
         
         # 2. Prepare training kwargs
-        dataset_ref = dataset.get_ref()
         train_kwargs = config.to_framework_kwargs()
-        train_kwargs['data'] = dataset_ref
         
         logger.info(
             f"Starting training for {self._tool_label()} on "
@@ -120,7 +118,7 @@ class ToolTrainer:
         # 3. Train (tool handles state transitions)
         self._training_active = True
         try:
-            await self.tool.train(dataset_ref, train_kwargs)
+            await self.tool.train(dataset, train_kwargs)
             self._emit_progress('training_completed', state=self._tool_state_value())
             logger.info(
                 f"Training complete for {self._tool_label()}. "

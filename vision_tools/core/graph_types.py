@@ -77,6 +77,16 @@ class Caption(GraphModel):
     model_id: str
 
 
+class Classification(GraphModel):
+    class_id: int | None = None
+    class_name: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class Classifications(GraphModel):
+    items: list[Classification] = Field(default_factory=list)
+
+
 class Keypoint(GraphModel):
     x: float
     y: float
@@ -92,11 +102,26 @@ class Poses(GraphModel):
     items: list[PoseKeypoints] = Field(default_factory=list)
 
 
+class SegmentationMask(GraphModel):
+    polygon: list[list[float]] = Field(default_factory=list)
+    class_id: int | None = None
+    class_name: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class SegmentationMasks(GraphModel):
+    items: list[SegmentationMask] = Field(default_factory=list)
+
+
 class History(GraphModel):
     items: list[Any] = Field(default_factory=list)
     window_start: float | None = Field(default=None, ge=0.0)
     window_end: float | None = Field(default=None, ge=0.0)
     emitted_at_frame: int = Field(..., ge=0)
+
+
+class Sequence(GraphModel):
+    items: list[Any] = Field(default_factory=list)
 
 
 class Alert(GraphModel):
@@ -111,6 +136,23 @@ class Alerts(GraphModel):
     items: list[Alert] = Field(default_factory=list)
 
 
+class MemoryMatch(GraphModel):
+    """A single result from a MemoryStore query."""
+
+    entry_id: str
+    label: str | None = None
+    similarity: float = Field(0.0, ge=0.0, le=1.0)
+    media_uri: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryMatches(GraphModel):
+    """Collection of results from a MemoryStore query."""
+
+    items: list[MemoryMatch] = Field(default_factory=list)
+    store_id: str = ""
+
+
 for _name, _model in {
     "FrameInfo": FrameInfo,
     "Image": Image,
@@ -122,11 +164,18 @@ for _name, _model in {
     "Crops": Crops,
     "Embedding": Embedding,
     "Caption": Caption,
+    "Classification": Classification,
+    "Classifications": Classifications,
     "Keypoint": Keypoint,
     "PoseKeypoints": PoseKeypoints,
     "Poses": Poses,
+    "SegmentationMask": SegmentationMask,
+    "SegmentationMasks": SegmentationMasks,
     "History": History,
+    "Sequence": Sequence,
     "Alert": Alert,
     "Alerts": Alerts,
+    "MemoryMatch": MemoryMatch,
+    "MemoryMatches": MemoryMatches,
 }.items():
     TypeRegistry.register_simple(_name, _model)

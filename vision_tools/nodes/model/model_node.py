@@ -7,6 +7,8 @@ from typing import Any
 from vision_tools.backends.base import Backend
 from vision_tools.core.graph_types import Image
 from vision_tools.core.node import Node, NodeContext, NodeState
+from vision_tools.training.artifacts import TrainedArtifact
+from vision_tools.training.dataset import VisionDataset
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +50,19 @@ class ModelNode(Node):
                 f"{self.node_id}: no backend set. Task node must resolve a backend before loading."
             )
 
-        fallback_model_id = self.config.get("checkpoint_id") or self.config.get("model")
-        model_id = self.model_resolver.resolve(
-            variants=self.config.get("models", {}),
-            mode=self.config.get("mode", "auto"),
-            fallback=fallback_model_id,
-        )
-        model_path = self.model_cache.get_or_download(model_id, downloader=self._download)
+        artifact_path = self.config.get("artifact_path")
+        if artifact_path:
+            model_path = Path(str(artifact_path))
+        else:
+            fallback_model_id = self.config.get("checkpoint_id") or self.config.get("model")
+            model_id = self.model_resolver.resolve(
+                variants=self.config.get("models", {}),
+                mode=self.config.get("mode", "auto"),
+                fallback=fallback_model_id,
+            )
+            model_path = self.model_cache.get_or_download(model_id, downloader=self._download)
         device = self.config.get("runtime", "auto")
-        self.model = self.backend.load_model(model_path, device)
+        self.model = self.backend.load_model(str(model_path), device)
         self._state = NodeState.READY
 
     def unload(self) -> None:
@@ -121,20 +127,64 @@ class ModelNode(Node):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
         return outputs
 
-    async def train(self, dataset_ref: str, config: dict | None = None) -> None:
+    async def train(
+        self,
+        dataset: VisionDataset,
+        config: dict | None = None,
+    ) -> TrainedArtifact:
         config = config or {}
+        if not self.supports_training():
+            raise RuntimeError(f"{self.node_id}: training is not supported for this node.")
         self._state = NodeState.TRAINING
         try:
-            await self._train_impl(dataset_ref, config)
+            artifact = await self._train_impl(dataset, config)
             self._state = NodeState.READY
+            return artifact
         except Exception:
             self._state = NodeState.FAILED
             raise
 
-    async def _train_impl(self, dataset_ref: str, config: dict) -> None:
-        raise NotImplementedError(
-            f"{self.node_id}: training not supported. Override _train_impl() to add training."
+    async def _train_impl(
+        self,
+        dataset: VisionDataset,
+        config: dict,
+    ) -> TrainedArtifact:
+        backend = self.backend
+        if backend is None or not hasattr(backend, "train"):
+            raise NotImplementedError(
+                f"{self.node_id}: training not supported. Override _train_impl() to add training."
+            )
+
+        errors = self.validate_training_dataset(dataset, config)
+        if errors:
+            joined = "\n".join(f"  - {error}" for error in errors)
+            raise ValueError(f"{self.node_id}: dataset is incompatible with training:\n{joined}")
+
+        model_ref = str(
+            self.config.get("artifact_path")
+            or self.config.get("checkpoint_id")
+            or self.config.get("model")
+            or ""
         )
+        if not model_ref:
+            raise ValueError(f"{self.node_id}: missing model reference for training.")
+        return backend.train(model_ref, dataset, config, callbacks=None)
 
     def _download(self, model_id: str, destination: Path) -> Path:
         return destination
+
+    def supports_training(self) -> bool:
+        return bool(
+            self.backend is not None
+            and hasattr(self.backend, "supports_training")
+            and self.backend.supports_training(self.config)
+        )
+
+    def validate_training_dataset(
+        self,
+        dataset: VisionDataset,
+        config: dict | None = None,
+    ) -> list[str]:
+        if not self.backend or not hasattr(self.backend, "validate_training_dataset"):
+            return ["Training backend is not available."]
+        return self.backend.validate_training_dataset(dataset, config or self.config)

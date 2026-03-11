@@ -100,7 +100,8 @@ class TypeRegistry:
     @classmethod
     def list_type_names(cls) -> list[str]:
         names = sorted(cls._simple_types.keys())
-        names.extend(f"History[{name}]" for name in sorted(cls._simple_types.keys()))
+        for prefix in ("History", "Sequence"):
+            names.extend(f"{prefix}[{name}]" for name in sorted(cls._simple_types.keys()))
         return names
 
     @classmethod
@@ -138,11 +139,14 @@ class TypeRegistry:
             )
 
         if isinstance(resolved, GenericTypeRef):
-            if resolved.name != "History":
+            if resolved.name == "History":
+                container_model = cls.get_model("History")
+            elif resolved.name == "Sequence":
+                container_model = cls.get_model("Sequence")
+            else:
                 raise ValueError(f"Unsupported generic type '{resolved.name}'.")
 
-            history_model = cls.get_model("History")
-            validated = history_model.model_validate(value)
+            validated = container_model.model_validate(value)
             validated.items = [
                 cls.validate(resolved.item_type, item) for item in validated.items
             ]

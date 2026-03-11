@@ -28,6 +28,8 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from vision_tools.core.node import NodeContext
+from vision_tools.training.artifacts import TrainedArtifact
+from vision_tools.training.dataset import VisionDataset
 
 
 @runtime_checkable
@@ -87,4 +89,26 @@ class Backend(Protocol):
         Returns:
             E.g. ``["pytorch", "openvino", "onnx"]``.
         """
+        ...
+
+    def supports_training(self, config: dict[str, Any] | None = None) -> bool:
+        """Return whether this backend supports fine-tuning for the given config."""
+        ...
+
+    def validate_training_dataset(
+        self,
+        dataset: VisionDataset,
+        config: dict[str, Any] | None = None,
+    ) -> list[str]:
+        """Validate whether a VisionDataset is compatible with backend training."""
+        ...
+
+    def train(
+        self,
+        model_ref: str,
+        dataset: VisionDataset,
+        config: dict[str, Any] | None = None,
+        callbacks: dict[str, Any] | None = None,
+    ) -> TrainedArtifact:
+        """Run backend-specific training and return the produced artifact metadata."""
         ...

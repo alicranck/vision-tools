@@ -27,9 +27,9 @@ class ModelCatalog:
 
     _CATALOG: dict[InferenceTask, dict[str, dict[ModelSize, _CatalogEntry]]] = {
         InferenceTask.DETECTION: {
-            "yolo": {
+            "yolo_detector": {
                 ModelSize.SMALL: _CatalogEntry(
-                    checkpoint_id="yoloe-11s-seg.pt",
+                    checkpoint_id="yolo11s.pt",
                     runtime_by_device={
                         DeviceTarget.AUTO: "auto",
                         DeviceTarget.CPU: "openvino",
@@ -37,7 +37,7 @@ class ModelCatalog:
                     },
                 ),
                 ModelSize.MEDIUM: _CatalogEntry(
-                    checkpoint_id="yoloe-11m-seg.pt",
+                    checkpoint_id="yolo11m.pt",
                     runtime_by_device={
                         DeviceTarget.AUTO: "auto",
                         DeviceTarget.CPU: "openvino",
@@ -45,7 +45,7 @@ class ModelCatalog:
                     },
                 ),
                 ModelSize.LARGE: _CatalogEntry(
-                    checkpoint_id="yoloe-11l-seg.pt",
+                    checkpoint_id="yolo11l.pt",
                     runtime_by_device={
                         DeviceTarget.AUTO: "auto",
                         DeviceTarget.CPU: "openvino",
@@ -103,6 +103,62 @@ class ModelCatalog:
                     runtime_by_device={
                         DeviceTarget.AUTO: "auto",
                         DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+            },
+        },
+        InferenceTask.CLASSIFICATION: {
+            "yolo_cls": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="yolo11n-cls.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="yolo11s-cls.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="yolo11m-cls.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+            },
+        },
+        InferenceTask.SEGMENTATION: {
+            "yolo_seg": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="yolo11n-seg.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="yolo11s-seg.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="yolo11m-seg.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "cpu",
                         DeviceTarget.GPU: "pytorch",
                     },
                 ),

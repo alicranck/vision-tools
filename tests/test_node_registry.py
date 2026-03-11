@@ -17,6 +17,10 @@ def setup_function():
 def test_builtin_nodes_registered():
     names = {entry["type"] for entry in NodeRegistry.list_nodes()}
     assert "object_detector" in names
+    assert "open_vocab_detector" in names
+    assert "detector" in names
+    assert "classifier" in names
+    assert "segmenter" in names
     assert "embedder" in names
     assert "captioner" in names
     assert "pose_estimator" in names
@@ -37,6 +41,8 @@ def test_registry_metadata_exposes_ports():
     assert metadata["captioner"]["output_ports"]["caption"] == "Caption"
     assert metadata["pose_estimator"]["output_ports"]["poses"] == "Poses"
     assert metadata["dynamic_logic"]["dynamic_ports"] is True
+    assert metadata["detector"]["training"]["supported"] is True
+    assert metadata["open_vocab_detector"]["training"]["supported"] is False
     assert sources["input"]["output_ports"]["image"] == "Image"
     assert sources["input"]["executable"] is False
 

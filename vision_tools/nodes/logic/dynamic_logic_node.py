@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from vision_tools.core.node import NodeContext
+from vision_tools.core.node import NodeContext, NodeState
 from vision_tools.core.type_refs import PortTypeRef, TypeRegistry, parse_type_ref
 from vision_tools.nodes.logic.logic_node import LogicNode
 
@@ -32,11 +32,37 @@ class DynamicLogicNode(LogicNode):
         }
         self.params = dict(validated.params)
         self._state_store: dict[str, Any] = {}
-        self._namespace: dict[str, Any] = {}
-        exec(validated.code, self._namespace)
-        if "execute" not in self._namespace:
-            raise ValueError("Provided code must define an 'execute(inputs, context, config, state)' function.")
-        self._user_execute = self._namespace["execute"]
+        self._code = validated.code
+        self._namespace: dict[str, Any] | None = None
+        self._user_execute = None
+
+    def _compile(self) -> None:
+        if self._user_execute is not None:
+            return
+
+        namespace: dict[str, Any] = {}
+        try:
+            exec(self._code, namespace)
+            user_execute = namespace.get("execute")
+            if user_execute is None:
+                raise ValueError(
+                    "Provided code must define an 'execute(inputs, context, config, state)' function."
+                )
+        except Exception:
+            self._state = NodeState.FAILED
+            raise
+
+        self._namespace = namespace
+        self._user_execute = user_execute
+        self._state = NodeState.READY
+
+    def load(self) -> None:
+        self._compile()
+
+    def unload(self) -> None:
+        self._namespace = None
+        self._user_execute = None
+        self._state = NodeState.UNLOADED
 
     def get_input_ports(self) -> dict[str, PortTypeRef]:
         return dict(self._input_ports)
@@ -45,6 +71,8 @@ class DynamicLogicNode(LogicNode):
         return dict(self._output_ports)
 
     def execute(self, inputs: dict[str, Any], context: NodeContext) -> dict[str, Any]:
+        self._compile()
+        assert self._user_execute is not None
         result = self._user_execute(inputs, context, self.params, self._state_store)
         if not isinstance(result, dict):
             raise TypeError(f"{self.node_id}: dynamic logic must return a dict of outputs.")

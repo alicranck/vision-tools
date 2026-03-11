@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel, Field
 
-from vision_tools.core.graph_types import Crop, Crops, Detections, Image, Tracks
+from vision_tools.core.graph_types import Detections, Image, Sequence, Tracks
 from vision_tools.nodes.logic.logic_node import LogicNode
 
 
@@ -16,7 +17,7 @@ class CropNodeConfig(BaseModel):
 
 class CropNode(LogicNode):
     InputPorts = {"image": "Image", "regions": "Detections | Tracks"}
-    OutputPorts = {"crops": "Crops"}
+    OutputPorts = {"images": "Sequence[Image]", "regions": "Tracks | Detections"}
 
     def __init__(self, node_id: str, config: dict | None = None) -> None:
         validated = CropNodeConfig.model_validate(config or {})
@@ -26,13 +27,14 @@ class CropNode(LogicNode):
     def execute(self, inputs: dict[str, Any], context):
         image: Image = inputs["image"]
         regions = inputs["regions"]
-        raw_image = image.data
+        raw_image = np.asarray(image.data)
         width = image.width
         height = image.height
-        items = regions.items
-        crops = []
 
-        for index, item in enumerate(items):
+        images: list[Image] = []
+        kept_items: list[Any] = []
+
+        for item in regions.items:
             x1, y1, x2, y2 = map(float, item.xyxy)
             pad_x = (x2 - x1) * self._config.padding
             pad_y = (y2 - y1) * self._config.padding
@@ -53,19 +55,21 @@ class CropNode(LogicNode):
                     continue
                 raise ValueError(f"{self.node_id}: invalid crop bounds {(ix1, iy1, ix2, iy2)}")
 
-            crop_image = raw_image[iy1:iy2, ix1:ix2]
-            crops.append(
-                Crop(
-                    track_id=getattr(item, "track_id", None),
-                    source_index=index,
-                    xyxy=[float(ix1), float(iy1), float(ix2), float(iy2)],
-                    image=crop_image,
-                    class_id=getattr(item, "class_id", None),
-                    class_name=getattr(item, "class_name", None),
-                )
+            crop_arr = raw_image[iy1:iy2, ix1:ix2]
+            h, w = crop_arr.shape[:2]
+            ch = int(crop_arr.shape[2]) if crop_arr.ndim == 3 else 1
+            images.append(Image(data=crop_arr, width=w, height=h, channels=ch))
+            kept_items.append(item)
+
+        if isinstance(regions, Tracks):
+            filtered_regions = Tracks(items=kept_items)
+        else:
+            filtered_regions = Detections(
+                items=kept_items,
+                class_names=getattr(regions, "class_names", None),
             )
 
-        return {"crops": Crops(items=crops)}
+        return {"images": Sequence(items=images), "regions": filtered_regions}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:

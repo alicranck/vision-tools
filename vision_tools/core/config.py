@@ -24,6 +24,8 @@ class NodeConfig(BaseModel):
 class InferenceTask(str, Enum):
     DETECTION = "detection"
     OPEN_VOCAB_DETECTION = "open_vocab_detection"
+    CLASSIFICATION = "classification"
+    SEGMENTATION = "segmentation"
     EMBEDDING = "embedding"
     CAPTIONING = "captioning"
     POSE = "pose"
@@ -39,6 +41,17 @@ class DeviceTarget(str, Enum):
     AUTO = "auto"
     CPU = "cpu"
     GPU = "gpu"
+
+
+class TrainingMode(str, Enum):
+    NONE = "none"
+    OPTIONAL = "optional"
+    REQUIRED = "required"
+
+
+class ModelSource(str, Enum):
+    BASE = "base"
+    TUNED = "tuned"
 
 
 class ModelIntent(BaseModel):

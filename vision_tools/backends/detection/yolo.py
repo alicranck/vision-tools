@@ -137,6 +137,18 @@ class YoloBackend:
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "openvino", "onnx"]
 
+    def supports_training(self, config: dict[str, Any] | None = None) -> bool:
+        _ = config
+        return False
+
+    def validate_training_dataset(self, dataset, config: dict[str, Any] | None = None) -> list[str]:
+        _ = config
+        return dataset.validate_for_tool("open_vocab_detection")
+
+    def train(self, model_ref: str, dataset, config: dict[str, Any] | None = None, callbacks=None):
+        _ = (model_ref, dataset, config, callbacks)
+        raise NotImplementedError("Open-vocabulary YOLO backend does not support training.")
+
     @staticmethod
     def _compile_openvino(model) -> Any:
         """Export model to OpenVINO format."""

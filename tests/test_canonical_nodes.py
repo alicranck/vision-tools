@@ -65,10 +65,10 @@ def test_crop_node_crops_tracks():
         items=[Track(track_id=7, xyxy=[1, 2, 5, 6], class_name="person", confidence=0.9)]
     )
     result = node.process({"image": image, "regions": tracks}, NodeContext())
-    crop = result["crops"].items[0]
-    assert crop.track_id == 7
-    assert crop.source_index == 0
-    assert crop.image.shape[:2] == (4, 4)
+    crop = result["images"].items[0]
+    assert crop.width == 4
+    assert crop.height == 4
+    assert result["regions"].items[0].track_id == 7
 
 
 def test_buffer_node_emits_on_stride():
@@ -117,6 +117,31 @@ def execute(inputs, context, config, state):
     history = History(items=[Tracks(items=[])], window_start=0.0, window_end=0.0, emitted_at_frame=0)
     result = node.process({"history": history}, NodeContext())
     assert result["alerts"].items[0].message == "ok"
+
+
+def test_dynamic_logic_does_not_exec_until_loaded(monkeypatch):
+    flag_name = "VISION_TOOLS_DYNAMIC_LOGIC_TEST_FLAG"
+    monkeypatch.delattr("builtins." + flag_name, raising=False)
+    code = f"""
+import builtins
+builtins.{flag_name} = getattr(builtins, "{flag_name}", 0) + 1
+
+def execute(inputs, context, config, state):
+    return {{"alerts": {{"items": []}}}}
+"""
+    node = DynamicLogicNode(
+        "logic",
+        {
+            "input_ports": {"history": "History[Tracks]"},
+            "output_ports": {"alerts": "Alerts"},
+            "code": code,
+        },
+    )
+
+    assert not hasattr(__import__("builtins"), flag_name)
+
+    node.load()
+    assert getattr(__import__("builtins"), flag_name) == 1
 
 
 def test_dynamic_logic_state_persists():

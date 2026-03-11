@@ -42,3 +42,9 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["vision_tools"]
+
+[tool.pytest.ini_options]
+markers = [
+    "heavy: resource-intensive tests that run model inference or training",
+    "long: long-running tests such as end-to-end training flows",
+]

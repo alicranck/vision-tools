@@ -7,6 +7,22 @@ def test_model_catalog_resolves_detector_intent() -> None:
     spec = ModelCatalog.resolve(
         ModelIntent(
             task=InferenceTask.DETECTION,
+            model_family="yolo_detector",
+            size=ModelSize.SMALL,
+            device=DeviceTarget.CPU,
+        )
+    )
+
+    assert spec.backend_task == "detection"
+    assert spec.backend_model == "yolo_detector"
+    assert spec.checkpoint_id
+    assert spec.runtime in {"openvino", "cpu", "auto", "pytorch"}
+
+
+def test_model_catalog_resolves_open_vocab_detector_intent() -> None:
+    spec = ModelCatalog.resolve(
+        ModelIntent(
+            task=InferenceTask.OPEN_VOCAB_DETECTION,
             model_family="yolo",
             size=ModelSize.SMALL,
             device=DeviceTarget.CPU,
@@ -16,7 +32,6 @@ def test_model_catalog_resolves_detector_intent() -> None:
     assert spec.backend_task == "detection"
     assert spec.backend_model == "yolo"
     assert spec.checkpoint_id
-    assert spec.runtime in {"openvino", "cpu", "auto", "pytorch"}
 
 
 def test_model_catalog_rejects_unknown_family() -> None:
