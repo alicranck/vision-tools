@@ -81,7 +81,7 @@ def test_model_node_train_delegates_to_backend(tmp_path: Path) -> None:
     image_path = tmp_path / "img.jpg"
     image_path.write_bytes(b"fake")
     dataset = VisionDataset.from_entries(
-        [(str(image_path), AnnotatedFrame(labels=["cat"]))],
+        [(str(image_path), AnnotatedFrame(image_label="cat"))],
         output_dir=str(tmp_path / "dataset"),
         val_split=0.0,
     )
@@ -117,7 +117,7 @@ def test_dataset_materialize_for_task_is_cached(tmp_path: Path) -> None:
     image_path = tmp_path / "img.jpg"
     image_path.write_bytes(b"fake")
     dataset = VisionDataset.from_entries(
-        [(str(image_path), AnnotatedFrame(labels=["cat"]))],
+        [(str(image_path), AnnotatedFrame(image_label="cat"))],
         output_dir=str(tmp_path / "dataset"),
         val_split=0.0,
     )
@@ -150,13 +150,3 @@ def test_model_node_train_fails_fast_for_incompatible_dataset(tmp_path: Path) ->
         asyncio.run(node.train(dataset, {"epochs": 1}))
 
     assert node.state == NodeState.FAILED
-
-
-def test_object_detector_alias_resolves_to_open_vocab_detector() -> None:
-    NodeRegistry.clear()
-    nodes_pkg.register_all()
-
-    object_detector_cls = NodeRegistry.get("object_detector")
-    open_vocab_cls = NodeRegistry.get("open_vocab_detector")
-
-    assert object_detector_cls is open_vocab_cls

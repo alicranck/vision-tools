@@ -239,7 +239,6 @@ class VisionDataset:
         detection_like_tools = {
             "ov_detection",
             "open_vocab_detector",
-            "object_detector",
             "detector",
             "pose_estimation",
             "pose_estimator",
@@ -292,6 +291,7 @@ class VisionDataset:
 
         class_names = sorted(
             {ann.class_name for _, af in entries for ann in af.annotations}
+            | {af.image_label for _, af in entries if af.image_label}
             | {label for _, af in entries for label in af.labels}
         )
         dataset._metadata = {
@@ -308,6 +308,40 @@ class VisionDataset:
         if self._entries is None:
             raise ValueError("This dataset is not entry-backed.")
         return self._entries
+
+    def annotation_count(self) -> int | None:
+        if self._entries is None:
+            return None
+        return sum(len(frame.annotations) for _, frame in self._entries)
+
+    def polygon_annotation_count(self) -> int | None:
+        if self._entries is None:
+            return None
+        return sum(
+            1
+            for _, frame in self._entries
+            for ann in frame.annotations
+            if len(ann.polygon) >= 3
+        )
+
+    def classification_validation_errors(self) -> list[str]:
+        if self._entries is None:
+            return []
+
+        errors: list[str] = []
+        labeled_entries = 0
+        for index, (_, frame) in enumerate(self._entries):
+            if frame.image_label is not None and not frame.image_label.strip():
+                errors.append(f"Entry {index} has an empty image_label.")
+                continue
+            if frame.image_label is not None:
+                labeled_entries += 1
+
+        if labeled_entries == 0:
+            errors.append("Classification training requires image_label on each entry.")
+        if labeled_entries != len(self._entries):
+            errors.append("Classification training requires every entry to define image_label.")
+        return errors
 
     def _split_entries(self) -> tuple[list[int], set[int]]:
         entries = self._ensure_entries()
@@ -381,18 +415,22 @@ class VisionDataset:
         indices, val_indices = self._split_entries()
         _ = indices
 
-        labels = sorted({label for _, frame in entries for label in frame.labels})
+        errors = self.classification_validation_errors()
+        if errors:
+            raise ValueError("\n".join(errors))
+
+        labels = sorted({frame.image_label for _, frame in entries if frame.image_label})
         if not labels:
-            raise ValueError("Classification training requires image-level labels.")
+            raise ValueError("Classification training requires image_label.")
 
         for split in ("train", "val"):
             for label in labels:
                 (root / split / label).mkdir(parents=True, exist_ok=True)
 
         for idx, (image_path, frame) in enumerate(entries):
-            if not frame.labels:
+            if frame.image_label is None:
                 continue
-            label = frame.labels[0]
+            label = frame.image_label
             split = "val" if idx in val_indices else "train"
             src = Path(image_path)
             ext = src.suffix or ".jpg"

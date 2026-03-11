@@ -19,8 +19,8 @@ import numpy as np
 import requests
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import Caption
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import Caption, CaptionResult
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +90,10 @@ class LlamaCppBackend:
             return {}
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Extract caption from chat completion response."""
+        """Extract caption to the canonical caption payload."""
         content = raw_output.get("choices", [{}])[0].get("message", {}).get("content", "")
         caption = Caption(text=content, model_id=self._model_id)
-        return CaptionResult(caption=caption).model_dump()
+        return {"caption": caption}
 
     def preprocess(self, inputs: np.ndarray) -> dict:
         """Prepare frame as chat completion payload."""

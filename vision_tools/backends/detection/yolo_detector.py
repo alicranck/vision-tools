@@ -58,7 +58,11 @@ class YoloDetectorBackend:
 
     def validate_training_dataset(self, dataset, config: dict[str, Any] | None = None) -> list[str]:
         _ = config
-        return dataset.validate_for_tool("detector")
+        errors = dataset.validate_for_tool("detector")
+        annotation_count = dataset.annotation_count()
+        if annotation_count == 0:
+            errors.append("Detection training requires object annotations.")
+        return errors
 
     def train(
         self,

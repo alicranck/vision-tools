@@ -2,7 +2,6 @@ import vision_tools.nodes as nodes_pkg
 from vision_tools.core.config import NodeConfig
 from vision_tools.core.registry import NodeRegistry
 from vision_tools.nodes.logic.dynamic_logic_node import DynamicLogicNode
-from vision_tools.nodes.model.detection import ObjectDetector
 from vision_tools.nodes.state.buffer_node import BufferNode
 from vision_tools.nodes.state.track_node import TrackNode
 from vision_tools.nodes.utility.crop_node import CropNode
@@ -16,7 +15,6 @@ def setup_function():
 
 def test_builtin_nodes_registered():
     names = {entry["type"] for entry in NodeRegistry.list_nodes()}
-    assert "object_detector" in names
     assert "open_vocab_detector" in names
     assert "detector" in names
     assert "classifier" in names

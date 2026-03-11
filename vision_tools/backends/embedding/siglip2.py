@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import Embedding
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import Embedding, EmbeddingResult
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class SigLIP2Backend:
                 return model.get_image_features(**inputs)
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Convert raw embeddings to EmbeddingResult dict."""
+        """Convert raw embeddings to the canonical embedding payload."""
         import torch
         if isinstance(raw_output, torch.Tensor):
             vector = raw_output.cpu().numpy().squeeze().tolist()
@@ -85,7 +85,7 @@ class SigLIP2Backend:
             model_id=self._model_id,
             dimension=len(vector),
         )
-        return EmbeddingResult(embedding=emb).model_dump()
+        return {"embedding": emb}
 
     def encode_text(self, model: Any, text: str) -> list[float]:
         """Encode text into an embedding vector.

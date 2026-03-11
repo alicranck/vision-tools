@@ -13,7 +13,7 @@ from vision_tools.core.config import (
     ModelSource,
     TrainingMode,
 )
-from vision_tools.core.graph_types import SegmentationMask, SegmentationMasks
+from vision_tools.core.graph_types import SegmentationMasks
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.runtime.model_catalog import ModelCatalog
 
@@ -74,21 +74,14 @@ class Segmenter(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs: Any) -> dict[str, Any]:
-        if isinstance(outputs, SegmentationMasks):
-            return {"segmentation_masks": outputs}
         if not isinstance(outputs, dict):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
-        items = []
-        for item in outputs.get("items", []):
-            items.append(
-                SegmentationMask(
-                    polygon=[list(map(float, point)) for point in item.get("polygon", [])],
-                    class_id=item.get("class_id"),
-                    class_name=item.get("class_name"),
-                    confidence=item.get("confidence"),
-                )
-            )
-        return {"segmentation_masks": SegmentationMasks(items=items)}
+        if "segmentation_masks" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'segmentation_masks'.")
+        masks = outputs["segmentation_masks"]
+        if hasattr(masks, "model_dump"):
+            masks = masks.model_dump()
+        return {"segmentation_masks": SegmentationMasks.model_validate(masks)}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:

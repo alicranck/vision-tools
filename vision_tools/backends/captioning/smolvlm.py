@@ -11,8 +11,8 @@ from typing import Any
 import numpy as np
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import Caption
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import Caption, CaptionResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +46,13 @@ class SmolVLMBackend:
         return self._processor.batch_decode(generated_ids, skip_special_tokens=True)
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Extract caption text from generated output."""
+        """Extract caption text to the canonical caption payload."""
         text = raw_output[0] if raw_output else ""
         # Guard against missing 'Assistant:' delimiter
         if "Assistant:" in text:
             text = text.split("Assistant:", 1)[1].strip()
         caption = Caption(text=text, model_id=self._model_id)
-        return CaptionResult(caption=caption).model_dump()
+        return {"caption": caption}
 
     def preprocess(self, inputs: np.ndarray) -> Any:
         """Prepare frame for SmolVLM2 inference."""

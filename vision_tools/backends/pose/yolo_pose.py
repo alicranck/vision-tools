@@ -12,8 +12,8 @@ from typing import Any
 import numpy as np
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import Keypoint, PoseKeypoints, Poses
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import Keypoint, PoseKeypoints, PoseResult
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class YoloPoseBackend:
         return results[0]
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Convert YOLO-Pose results to PoseResult dict."""
+        """Convert YOLO-Pose results to the canonical poses payload."""
         keypoints = raw_output.keypoints
 
         poses = []
@@ -61,7 +61,7 @@ class YoloPoseBackend:
                 ]
                 poses.append(PoseKeypoints(person_id=i, keypoints=kpts))
 
-        return PoseResult(poses=poses).model_dump()
+        return {"poses": Poses(items=poses)}
 
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "openvino"]

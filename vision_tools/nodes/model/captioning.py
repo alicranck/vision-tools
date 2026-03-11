@@ -29,13 +29,11 @@ class Captioner(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs):
-        if isinstance(outputs, Caption):
-            return {"caption": outputs}
-        if isinstance(outputs, dict) and "caption" in outputs and isinstance(outputs["caption"], Caption):
-            return outputs
         if not isinstance(outputs, dict):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
-        caption = outputs.get("caption", outputs)
+        if "caption" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'caption'.")
+        caption = outputs["caption"]
         if hasattr(caption, "model_dump"):
             caption = caption.model_dump()
         return {"caption": Caption.model_validate(caption)}

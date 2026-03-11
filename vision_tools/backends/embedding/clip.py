@@ -11,8 +11,8 @@ from typing import Any
 import numpy as np
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import Embedding
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import Embedding, EmbeddingResult
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class CLIPBackend:
         return model.encode_image(inputs)
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Convert CLIP features to EmbeddingResult dict."""
+        """Convert CLIP features to the canonical embedding payload."""
         features = raw_output / raw_output.norm(dim=-1, keepdim=True)
         vector = features.cpu().numpy()[0].tolist()
         emb = Embedding(
@@ -51,7 +51,7 @@ class CLIPBackend:
             model_id=self._model_id,
             dimension=len(vector),
         )
-        return EmbeddingResult(embedding=emb).model_dump()
+        return {"embedding": emb}
 
     def encode_text(self, model: Any, text: str) -> list[float]:
         """Encode text using CLIP."""

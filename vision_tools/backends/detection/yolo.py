@@ -1,7 +1,7 @@
 """
 YoloBackend — YOLO model loading, inference, postprocessing.
 
-Ported from ``OpenVocabularyDetector``. Supports PyTorch and OpenVINO runtimes.
+Supports open-vocabulary detection inference for ``open_vocab_detector``.
 """
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import BoundingBox, Detections
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import BoundingBox, DetectionResult
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class YoloBackend:
         return {"tracks": self._kalman_filters, "class_names": results[0].names}
 
     def postprocess(self, raw_output: Any, context: NodeContext) -> dict:
-        """Convert YOLO + tracker output to DetectionResult dict."""
+        """Convert YOLO + tracker output to the canonical detections payload."""
         class_names = raw_output["class_names"]
         boxes = [
             BoundingBox(
@@ -132,7 +132,7 @@ class YoloBackend:
             )
             for tid, kf in raw_output["tracks"].items()
         ]
-        return DetectionResult(boxes=boxes, class_names=class_names).model_dump()
+        return {"detections": Detections(items=boxes, class_names=class_names)}
 
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "openvino", "onnx"]
@@ -143,7 +143,7 @@ class YoloBackend:
 
     def validate_training_dataset(self, dataset, config: dict[str, Any] | None = None) -> list[str]:
         _ = config
-        return dataset.validate_for_tool("open_vocab_detection")
+        return dataset.validate_for_tool("open_vocab_detector")
 
     def train(self, model_ref: str, dataset, config: dict[str, Any] | None = None, callbacks=None):
         _ = (model_ref, dataset, config, callbacks)

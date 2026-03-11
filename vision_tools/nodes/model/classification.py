@@ -13,7 +13,7 @@ from vision_tools.core.config import (
     ModelSource,
     TrainingMode,
 )
-from vision_tools.core.graph_types import Classification, Classifications
+from vision_tools.core.graph_types import Classifications
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.runtime.model_catalog import ModelCatalog
 
@@ -74,20 +74,14 @@ class Classifier(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs: Any) -> dict[str, Any]:
-        if isinstance(outputs, Classifications):
-            return {"classifications": outputs}
-        items = []
-        if isinstance(outputs, dict):
-            for item in outputs.get("items", []):
-                items.append(
-                    Classification(
-                        class_id=item.get("class_id"),
-                        class_name=item.get("class_name"),
-                        confidence=item.get("confidence"),
-                    )
-                )
-            return {"classifications": Classifications(items=items)}
-        raise TypeError(f"{self.node_id}: backend output must be a dict.")
+        if not isinstance(outputs, dict):
+            raise TypeError(f"{self.node_id}: backend output must be a dict.")
+        if "classifications" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'classifications'.")
+        classifications = outputs["classifications"]
+        if hasattr(classifications, "model_dump"):
+            classifications = classifications.model_dump()
+        return {"classifications": Classifications.model_validate(classifications)}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:

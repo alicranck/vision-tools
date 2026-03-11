@@ -99,16 +99,23 @@ class AnnotatedFrame(BaseModel):
     """All annotations for a single frame / dataset entry."""
 
     annotations: List[Annotation] = Field(default_factory=list)
+    image_label: Optional[str] = Field(
+        default=None,
+        description="Single image-level classification label.",
+    )
     labels: List[str] = Field(
         default_factory=list,
-        description="Image-level labels for classification tasks.",
+        description="Generic image-level labels/tags for non-classification use cases.",
     )
 
     @property
     def class_names(self) -> list[str]:
         """Unique class names across all annotations, sorted."""
-        return sorted({a.class_name for a in self.annotations} | set(self.labels))
+        names = {a.class_name for a in self.annotations} | set(self.labels)
+        if self.image_label:
+            names.add(self.image_label)
+        return sorted(names)
 
     @property
     def is_empty(self) -> bool:
-        return len(self.annotations) == 0 and len(self.labels) == 0
+        return len(self.annotations) == 0 and len(self.labels) == 0 and self.image_label is None

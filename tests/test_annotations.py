@@ -207,7 +207,7 @@ class TestVisionDatasetFromEntries:
                 assert parts[0] == "0"  # single class → id 0
                 assert len(parts) == 5  # bbox: class cx cy w h
 
-    @pytest.mark.parametrize("tool_type", ["detector", "open_vocab_detector", "object_detector"])
+    @pytest.mark.parametrize("tool_type", ["detector", "open_vocab_detector"])
     def test_validate_for_tool(self, tmp_path, tool_type):
         img_dir = tmp_path / "imgs"
         img_dir.mkdir()
@@ -289,7 +289,7 @@ class TestVisionDatasetFromEntries:
         for i in range(3):
             p = img_dir / f"img_{i}.jpg"
             _create_test_image(p)
-            entries.append((str(p), AnnotatedFrame(labels=["cat" if i < 2 else "dog"])))
+            entries.append((str(p), AnnotatedFrame(image_label="cat" if i < 2 else "dog")))
 
         ds = VisionDataset.from_entries(entries, output_dir=str(tmp_path / "out"), val_split=0.0)
         ref = ds.materialize_for_task("classification")
@@ -298,7 +298,42 @@ class TestVisionDatasetFromEntries:
         assert (tmp_path / "out" / "classification" / "train").is_dir()
         assert (tmp_path / "out" / "classification" / "train" / "cat").is_dir()
 
-    def test_annotated_frame_includes_image_labels(self):
-        frame = AnnotatedFrame(labels=["cat", "outdoor"])
+    def test_annotated_frame_includes_image_label_and_labels(self):
+        frame = AnnotatedFrame(image_label="cat", labels=["outdoor"])
         assert frame.class_names == ["cat", "outdoor"]
         assert not frame.is_empty
+
+    def test_classification_validation_errors_require_image_label_for_every_entry(self, tmp_path):
+        img_dir = tmp_path / "imgs"
+        img_dir.mkdir()
+        entries = []
+        for i in range(2):
+            image_path = img_dir / f"img_{i}.jpg"
+            _create_test_image(image_path)
+            frame = AnnotatedFrame(image_label="cat" if i == 0 else None)
+            entries.append((str(image_path), frame))
+
+        dataset = VisionDataset.from_entries(
+            entries,
+            output_dir=str(tmp_path / "out"),
+            val_split=0.0,
+        )
+
+        assert dataset.classification_validation_errors() == [
+            "Classification training requires every entry to define image_label."
+        ]
+
+    def test_classification_materialization_rejects_missing_image_label(self, tmp_path):
+        img_dir = tmp_path / "imgs"
+        img_dir.mkdir()
+        image_path = img_dir / "img.jpg"
+        _create_test_image(image_path)
+
+        dataset = VisionDataset.from_entries(
+            [(str(image_path), AnnotatedFrame(labels=["tag-only"]))],
+            output_dir=str(tmp_path / "out"),
+            val_split=0.0,
+        )
+
+        with pytest.raises(ValueError, match="image_label"):
+            dataset.materialize_for_task("classification")

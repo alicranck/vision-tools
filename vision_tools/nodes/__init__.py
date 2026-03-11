@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 NODE_SPECS = [
-    ("object_detector", "model", "vision_tools.nodes.model.detection", "OpenVocabularyDetector"),
     ("open_vocab_detector", "model", "vision_tools.nodes.model.detection", "OpenVocabularyDetector"),
     ("detector", "model", "vision_tools.nodes.model.detection", "Detector"),
     ("classifier", "model", "vision_tools.nodes.model.classification", "Classifier"),

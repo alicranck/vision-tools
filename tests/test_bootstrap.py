@@ -25,7 +25,6 @@ def test_register_all_keeps_builtin_nodes_when_optional_backend_import_fails(mon
         nodes_pkg.register_all()
 
     names = {entry["type"] for entry in NodeRegistry.list_nodes()}
-    assert "object_detector" in names
     assert "dynamic_logic" in names
     assert "buffer" in names
     assert "smolvlm" not in {

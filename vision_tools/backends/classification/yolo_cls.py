@@ -59,6 +59,7 @@ class YoloClassificationBackend:
         errors = []
         if dataset.num_images == 0:
             errors.append("Dataset contains no images")
+        errors.extend(dataset.classification_validation_errors())
         try:
             dataset.materialize_for_task("classification")
         except Exception as exc:

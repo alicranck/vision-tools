@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Any
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.graph_types import BoundingBox, Detections
 from vision_tools.core.node import NodeContext
-from vision_tools.core.schemas import BoundingBox, DetectionResult
 
 
 @BackendRegistry.register(task="detection", model="rtdetr")
@@ -54,7 +54,7 @@ class RTDetrBackend:
                     )
                 )
 
-        return DetectionResult(boxes=boxes_out, class_names=names).model_dump()
+        return {"detections": Detections(items=boxes_out, class_names=names)}
 
     def get_available_runtimes(self) -> list[str]:
         return ["pytorch", "cpu", "auto"]

@@ -27,13 +27,11 @@ class Embedder(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs):
-        if isinstance(outputs, Embedding):
-            return {"embedding": outputs}
-        if isinstance(outputs, dict) and "embedding" in outputs and isinstance(outputs["embedding"], Embedding):
-            return outputs
         if not isinstance(outputs, dict):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
-        embedding = outputs.get("embedding", outputs)
+        if "embedding" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'embedding'.")
+        embedding = outputs["embedding"]
         if hasattr(embedding, "model_dump"):
             embedding = embedding.model_dump()
         return {"embedding": Embedding.model_validate(embedding)}

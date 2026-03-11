@@ -13,7 +13,7 @@ from vision_tools.core.config import (
     ModelSource,
     TrainingMode,
 )
-from vision_tools.core.graph_types import BoundingBox, Detections
+from vision_tools.core.graph_types import Detections
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.runtime.model_catalog import ModelCatalog
 
@@ -75,31 +75,14 @@ class _BaseDetector(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs: Any) -> dict[str, Any]:
-        if isinstance(outputs, Detections):
-            return {"detections": outputs}
-
-        if isinstance(outputs, dict) and "detections" in outputs:
-            return outputs
-
         if not isinstance(outputs, dict):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
-
-        boxes = outputs.get("boxes", [])
-        class_names = outputs.get("class_names")
-        normalized_boxes = []
-        for box in boxes:
-            if hasattr(box, "model_dump"):
-                box = box.model_dump()
-            normalized_boxes.append(
-                BoundingBox(
-                    xyxy=list(map(float, box["xyxy"])),
-                    class_id=box.get("class_id"),
-                    class_name=box.get("class_name"),
-                    confidence=box.get("confidence"),
-                    track_id=box.get("track_id", box.get("tracker_id")),
-                )
-            )
-        return {"detections": Detections(items=normalized_boxes, class_names=class_names)}
+        if "detections" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'detections'.")
+        detections = outputs["detections"]
+        if hasattr(detections, "model_dump"):
+            detections = detections.model_dump()
+        return {"detections": Detections.model_validate(detections)}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:
@@ -141,7 +124,3 @@ class Detector(_BaseDetector):
     def __init__(self, node_id: str = "detector", config: dict | None = None, **kwargs) -> None:
         merged = {"task": InferenceTask.DETECTION, "prompt_free": True, **(config or {})}
         super().__init__(node_id=node_id, config=merged, **kwargs)
-
-
-# Backward compatibility for existing imports/tests.
-ObjectDetector = OpenVocabularyDetector

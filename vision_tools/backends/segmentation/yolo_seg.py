@@ -58,7 +58,11 @@ class YoloSegmentationBackend:
 
     def validate_training_dataset(self, dataset, config: dict[str, Any] | None = None) -> list[str]:
         _ = config
-        return dataset.validate_for_tool("segmenter")
+        errors = dataset.validate_for_tool("segmenter")
+        polygon_count = dataset.polygon_annotation_count()
+        if polygon_count == 0:
+            errors.append("Segmentation training requires polygon annotations.")
+        return errors
 
     def train(self, model_ref: str, dataset, config: dict[str, Any] | None = None, callbacks=None) -> TrainedArtifact:
         from ultralytics import YOLO

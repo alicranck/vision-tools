@@ -40,7 +40,7 @@ from vision_tools.nodes.logic.dynamic_logic_node import DynamicLogicNode
 from vision_tools.nodes.logic.logic_node import LogicNode
 from vision_tools.nodes.model.captioning import Captioner
 from vision_tools.nodes.model.classification import Classifier
-from vision_tools.nodes.model.detection import Detector, ObjectDetector, OpenVocabularyDetector
+from vision_tools.nodes.model.detection import Detector, OpenVocabularyDetector
 from vision_tools.nodes.model.embedding import Embedder
 from vision_tools.nodes.model.model_node import ModelNode
 from vision_tools.nodes.model.pose import PoseEstimator

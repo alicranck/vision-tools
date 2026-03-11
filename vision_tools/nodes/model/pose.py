@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
-from vision_tools.core.graph_types import Keypoint, PoseKeypoints, Poses
+from vision_tools.core.graph_types import Poses
 from vision_tools.nodes.model.model_node import ModelNode
 
 
@@ -29,27 +29,14 @@ class PoseEstimator(ModelNode):
         return inputs["image"].data
 
     def normalize_outputs(self, outputs):
-        if isinstance(outputs, Poses):
-            return {"poses": outputs}
-        if isinstance(outputs, dict) and "poses" in outputs and isinstance(outputs["poses"], Poses):
-            return outputs
         if not isinstance(outputs, dict):
             raise TypeError(f"{self.node_id}: backend output must be a dict.")
-        raw_poses = outputs.get("poses", outputs.get("items", []))
-        normalized = []
-        for pose in raw_poses:
-            if hasattr(pose, "model_dump"):
-                pose = pose.model_dump()
-            normalized.append(
-                PoseKeypoints(
-                    person_id=pose["person_id"],
-                    keypoints=[
-                        Keypoint.model_validate(kpt)
-                        for kpt in pose.get("keypoints", [])
-                    ],
-                )
-            )
-        return {"poses": Poses(items=normalized)}
+        if "poses" not in outputs:
+            raise TypeError(f"{self.node_id}: backend output must define 'poses'.")
+        poses = outputs["poses"]
+        if hasattr(poses, "model_dump"):
+            poses = poses.model_dump()
+        return {"poses": Poses.model_validate(poses)}
 
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:
