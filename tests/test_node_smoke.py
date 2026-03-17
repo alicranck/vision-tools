@@ -69,7 +69,11 @@ def test_model_nodes_load_and_process_with_canonical_outputs() -> None:
     cases = [
         (
             OpenVocabularyDetector(
-                config={"artifact_path": "/tmp/open-vocab.pt", "model_family": "yolo"},
+                config={
+                    "artifact_path": "/tmp/open-vocab.pt",
+                    "task": "open_vocab_detection",
+                    "model_family": "yolo",
+                },
                 backend=_StubInferenceBackend(
                     {"detections": Detections(items=[BoundingBox(xyxy=[0, 0, 5, 5], class_name="person")])}
                 ),
@@ -115,7 +119,7 @@ def test_model_nodes_load_and_process_with_canonical_outputs() -> None:
         ),
         (
             Embedder(
-                config={"artifact_path": "/tmp/embedder.pt", "model": "siglip2"},
+                config={"artifact_path": "/tmp/embedder.pt", "model_family": "siglip2"},
                 backend=_StubInferenceBackend(
                     {"embedding": Embedding(vector=[0.1, 0.2], model_id="stub", dimension=2)}
                 ),
@@ -124,14 +128,14 @@ def test_model_nodes_load_and_process_with_canonical_outputs() -> None:
         ),
         (
             Captioner(
-                config={"artifact_path": "/tmp/captioner.gguf", "model": "smolvlm"},
+                config={"artifact_path": "/tmp/captioner.gguf", "model_family": "smolvlm"},
                 backend=_StubInferenceBackend({"caption": Caption(text="a test caption", model_id="stub")}),
             ),
             "caption",
         ),
         (
             PoseEstimator(
-                config={"artifact_path": "/tmp/pose.pt", "model": "yolo_pose"},
+                config={"artifact_path": "/tmp/pose.pt", "model_family": "yolo_pose"},
                 backend=_StubInferenceBackend(
                     {
                         "poses": Poses(

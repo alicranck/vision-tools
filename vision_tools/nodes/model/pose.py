@@ -1,17 +1,57 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, model_validator
 
 from vision_tools.backends.registry import BackendRegistry
+from vision_tools.core.config import DeviceTarget, InferenceTask, ModelIntent, ModelSize
 from vision_tools.core.graph_types import Poses
 from vision_tools.nodes.model.model_node import ModelNode
+from vision_tools.runtime.model_catalog import ModelCatalog
 
 
 class PoseEstimatorConfig(BaseModel):
-    model: str = Field("yolo_pose", description="Model backend: 'yolo_pose'")
-    runtime: str = Field("auto", description="Runtime: 'auto', 'pytorch', 'openvino'")
-    imgsz: int = Field(640, description="Input image size")
-    conf_threshold: float = Field(0.5, ge=0.0, le=1.0, description="Confidence threshold")
+    task: InferenceTask = Field(
+        default=InferenceTask.POSE,
+        description="Inference task category for model catalog resolution.",
+    )
+    model_family: str = Field(
+        "yolo_pose",
+        description="Pose estimation backend family, for example 'yolo_pose'.",
+    )
+    size: ModelSize = Field(
+        ModelSize.SMALL,
+        description="Model size tier used when resolving the checkpoint from the catalog.",
+    )
+    device: DeviceTarget = Field(
+        DeviceTarget.AUTO,
+        description="Preferred execution device used to select the runtime and checkpoint.",
+    )
+    runtime: str | None = Field(
+        default=None,
+        description="Optional runtime override. Defaults to the catalog runtime for the selected device.",
+    )
+    imgsz: int = Field(640, description="Input image size for preprocessing.")
+    conf_threshold: float = Field(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold applied during pose inference.",
+    )
+    artifact_path: str | None = Field(
+        default=None,
+        description="Optional local artifact path. When set, it overrides catalog checkpoint resolution.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy_model_field(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "model_family" not in value and "model" in value:
+            upgraded = dict(value)
+            upgraded["model_family"] = upgraded["model"]
+            return upgraded
+        return value
 
 
 class PoseEstimator(ModelNode):
@@ -19,13 +59,36 @@ class PoseEstimator(ModelNode):
     OutputPorts = {"poses": "Poses"}
 
     def __init__(self, node_id: str = "pose_estimator", config: dict | None = None, **kwargs) -> None:
-        config = config or {}
-        model_name = config.get("model", "yolo_pose")
+        validated = PoseEstimatorConfig.model_validate(config or {})
+        intent = ModelIntent(
+            task=validated.task,
+            model_family=validated.model_family,
+            size=validated.size,
+            device=validated.device,
+        )
+        resolved = ModelCatalog.resolve(intent)
+
         if "backend" not in kwargs:
-            kwargs["backend"] = BackendRegistry.get(task="pose", model=model_name)
-        super().__init__(node_id=node_id, config=config, **kwargs)
+            kwargs["backend"] = BackendRegistry.get(
+                task=resolved.backend_task,
+                model=resolved.backend_model,
+            )
+
+        resolved_config = validated.model_dump(mode="json", exclude_none=True)
+        resolved_config.update(
+            {
+                "runtime": validated.runtime or resolved.runtime,
+                "checkpoint_id": resolved.checkpoint_id,
+                "backend_task": resolved.backend_task,
+                "backend_model": resolved.backend_model,
+            }
+        )
+        if hasattr(kwargs["backend"], "configure"):
+            kwargs["backend"].configure(resolved_config)
+        super().__init__(node_id=node_id, config=resolved_config, **kwargs)
 
     def preprocess(self, inputs, context):
+        _ = context
         return inputs["image"].data
 
     def normalize_outputs(self, outputs):
@@ -41,3 +104,7 @@ class PoseEstimator(ModelNode):
     @classmethod
     def get_config_schema(cls) -> type[BaseModel]:
         return PoseEstimatorConfig
+
+    @classmethod
+    def get_config_options(cls) -> dict[str, Any]:
+        return {"model_catalog": ModelCatalog.list_options(task=InferenceTask.POSE)}

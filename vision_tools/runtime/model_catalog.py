@@ -164,6 +164,142 @@ class ModelCatalog:
                 ),
             },
         },
+        InferenceTask.EMBEDDING: {
+            "siglip2": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="google/siglip2-base-patch16-256",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="google/siglip2-base-patch16-384",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="google/siglip2-large-patch16-384",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+            },
+            "clip": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="ViT-B/32",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="ViT-B/16",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="ViT-L/14",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+            },
+        },
+        InferenceTask.CAPTIONING: {
+            "smolvlm": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-256M-Video-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "openvino",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "openvino",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-500M-Video-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "openvino",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "openvino",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-2.2B-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "openvino",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "openvino",
+                    },
+                ),
+            },
+            "llamacpp": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-256M-Video-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-500M-Video-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="ggml-org/SmolVLM2-2.2B-Instruct-GGUF",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "cpu",
+                        DeviceTarget.CPU: "cpu",
+                        DeviceTarget.GPU: "cuda",
+                    },
+                ),
+            },
+        },
+        InferenceTask.POSE: {
+            "yolo_pose": {
+                ModelSize.SMALL: _CatalogEntry(
+                    checkpoint_id="yolo11n-pose.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.MEDIUM: _CatalogEntry(
+                    checkpoint_id="yolo11s-pose.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+                ModelSize.LARGE: _CatalogEntry(
+                    checkpoint_id="yolo11m-pose.pt",
+                    runtime_by_device={
+                        DeviceTarget.AUTO: "auto",
+                        DeviceTarget.CPU: "openvino",
+                        DeviceTarget.GPU: "pytorch",
+                    },
+                ),
+            },
+        },
     }
     _SIZE_ORDER: dict[ModelSize, int] = {
         ModelSize.SMALL: 0,
@@ -198,9 +334,8 @@ class ModelCatalog:
         if runtime is None:
             runtime = entry.runtime_by_device.get(DeviceTarget.AUTO, "auto")
 
-        backend_task = "detection" if intent.task == InferenceTask.OPEN_VOCAB_DETECTION else intent.task.value
         return ResolvedModelSpec(
-            backend_task=backend_task,
+            backend_task=intent.task.value,
             backend_model=intent.model_family,
             checkpoint_id=entry.checkpoint_id,
             runtime=runtime,
