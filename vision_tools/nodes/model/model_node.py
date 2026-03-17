@@ -54,7 +54,7 @@ class ModelNode(Node):
         if artifact_path:
             model_path = Path(str(artifact_path))
         else:
-            fallback_model_id = self.config.get("checkpoint_id") or self.config.get("model")
+            fallback_model_id = self.config.get("checkpoint_id")
             model_id = self.model_resolver.resolve(
                 variants=self.config.get("models", {}),
                 mode=self.config.get("mode", "auto"),
@@ -163,7 +163,6 @@ class ModelNode(Node):
         model_ref = str(
             self.config.get("artifact_path")
             or self.config.get("checkpoint_id")
-            or self.config.get("model")
             or ""
         )
         if not model_ref:

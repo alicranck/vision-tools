@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from vision_tools.backends.registry import BackendRegistry
 from vision_tools.core.config import DeviceTarget, InferenceTask, ModelIntent, ModelSize
@@ -43,16 +41,6 @@ class PoseEstimatorConfig(BaseModel):
         default=None,
         description="Optional local artifact path. When set, it overrides catalog checkpoint resolution.",
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _upgrade_legacy_model_field(cls, value: Any) -> Any:
-        if isinstance(value, dict) and "model_family" not in value and "model" in value:
-            upgraded = dict(value)
-            upgraded["model_family"] = upgraded["model"]
-            return upgraded
-        return value
-
 
 class PoseEstimator(ModelNode):
     InputPorts = {"image": "Image"}

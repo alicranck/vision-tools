@@ -39,7 +39,11 @@ class StubDetector(ModelNode):
     OutputPorts = {"detections": "Detections"}
 
     def __init__(self, node_id="det", config=None):
-        super().__init__(node_id=node_id, config=config or {"model": "mock"}, backend=StubBackend())
+        super().__init__(
+            node_id=node_id,
+            config=config or {"checkpoint_id": "mock"},
+            backend=StubBackend(),
+        )
 
     def preprocess(self, inputs, context):
         return inputs["image"].data
@@ -94,17 +98,19 @@ class StubPoseBackend:
 
     def postprocess(self, raw_output, context):
         return {
-            "poses": [
-                {
-                    "person_id": 1,
-                    "keypoints": [{"x": 1.0, "y": 2.0, "confidence": 0.9}],
-                }
-            ]
+            "poses": {
+                "items": [
+                    {
+                        "person_id": 1,
+                        "keypoints": [{"x": 1.0, "y": 2.0, "confidence": 0.9}],
+                    }
+                ]
+            }
         }
 
 
 def test_embedder_normalizes_graph_output():
-    node = Embedder(config={"model": "siglip2"}, backend=StubEmbeddingBackend())
+    node = Embedder(config={"model_family": "siglip2"}, backend=StubEmbeddingBackend())
     node.load()
     image = Image(data=np.zeros((8, 8, 3), dtype=np.uint8), width=8, height=8, channels=3)
     result = node.process({"image": image}, NodeContext(frame_shape=(8, 8, 3)))
@@ -113,7 +119,7 @@ def test_embedder_normalizes_graph_output():
 
 
 def test_captioner_normalizes_graph_output():
-    node = Captioner(config={"model": "smolvlm"}, backend=StubCaptionBackend())
+    node = Captioner(config={"model_family": "smolvlm"}, backend=StubCaptionBackend())
     node.load()
     image = Image(data=np.zeros((8, 8, 3), dtype=np.uint8), width=8, height=8, channels=3)
     result = node.process({"image": image}, NodeContext(frame_shape=(8, 8, 3)))
@@ -122,7 +128,7 @@ def test_captioner_normalizes_graph_output():
 
 
 def test_pose_estimator_normalizes_graph_output():
-    node = PoseEstimator(config={"model": "yolo_pose"}, backend=StubPoseBackend())
+    node = PoseEstimator(config={"model_family": "yolo_pose"}, backend=StubPoseBackend())
     node.load()
     image = Image(data=np.zeros((8, 8, 3), dtype=np.uint8), width=8, height=8, channels=3)
     result = node.process({"image": image}, NodeContext(frame_shape=(8, 8, 3)))
