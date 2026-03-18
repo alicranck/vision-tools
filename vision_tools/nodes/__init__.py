@@ -30,7 +30,7 @@ NODE_SPECS = [
 ]
 
 BACKEND_SPECS = [
-    ("detection", "yolo", "vision_tools.backends.detection.yolo", "YoloBackend"),
+    ("open_vocab_detection", "yolo", "vision_tools.backends.detection.yolo", "OpenVocabularyYoloBackend"),
     ("detection", "yolo_detector", "vision_tools.backends.detection.yolo_detector", "YoloDetectorBackend"),
     ("detection", "rtdetr", "vision_tools.backends.detection.rtdetr", "RTDetrBackend"),
     ("classification", "yolo_cls", "vision_tools.backends.classification.yolo_cls", "YoloClassificationBackend"),

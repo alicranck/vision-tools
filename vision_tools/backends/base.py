@@ -4,13 +4,13 @@ Backend Protocol — defines how model-specific operations are performed.
 Backends are the "how" in vision-tools: they handle model loading,
 raw inference, and output postprocessing. Task nodes (the "what")
 delegate to backends so that the same task node (e.g., ObjectDetector)
-can use different model families (YOLO, DETR) and runtimes
+can use different model families (YOLO detector, RT-DETR) and runtimes
 (PyTorch, OpenVINO, ONNX) without any code changes.
 
 Example::
 
-    @BackendRegistry.register(task="detection", model="yolo")
-    class YoloBackend:
+    @BackendRegistry.register(task="detection", model="yolo_detector")
+    class YoloDetectorBackend:
         def load_model(self, model_path, device="auto"):
             return YOLO(model_path)
 

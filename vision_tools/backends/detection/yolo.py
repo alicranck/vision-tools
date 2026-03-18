@@ -1,5 +1,5 @@
 """
-YoloBackend — YOLO model loading, inference, postprocessing.
+OpenVocabularyYoloBackend — YOLOE loading, inference, and postprocessing.
 
 Supports open-vocabulary detection inference for ``open_vocab_detector``.
 """
@@ -19,9 +19,9 @@ from vision_tools.core.node import NodeContext
 logger = logging.getLogger(__name__)
 
 
-@BackendRegistry.register(task="detection", model="yolo")
-class YoloBackend:
-    """Backend for YOLO-family object detection models.
+@BackendRegistry.register(task="open_vocab_detection", model="yolo")
+class OpenVocabularyYoloBackend:
+    """Backend for YOLO-family open-vocabulary detection models.
 
     Supports:
     - PyTorch (CUDA or CPU)
@@ -70,7 +70,7 @@ class YoloBackend:
             try:
                 import torch
                 if torch.cuda.is_available():
-                    logger.info("YoloBackend: using CUDA")
+                    logger.info("OpenVocabularyYoloBackend: using CUDA")
                 else:
                     model = self._compile_openvino(model)
             except ImportError:
@@ -152,7 +152,7 @@ class YoloBackend:
     @staticmethod
     def _compile_openvino(model) -> Any:
         """Export model to OpenVINO format."""
-        logger.info("YoloBackend: compiling to OpenVINO")
+        logger.info("OpenVocabularyYoloBackend: compiling to OpenVINO")
         from ultralytics import YOLOE
         exported = model.export(
             format="openvino", simplify=True,

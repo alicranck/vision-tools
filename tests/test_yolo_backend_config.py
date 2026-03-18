@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from vision_tools.backends.detection.yolo import YoloBackend
+from vision_tools.backends.detection.yolo import OpenVocabularyYoloBackend
 from vision_tools.backends.pose.yolo_pose import YoloPoseBackend
 
 
@@ -29,7 +29,7 @@ class _FakeModel:
 
 
 def test_infer_uses_configured_imgsz_and_conf(monkeypatch):
-    backend = YoloBackend()
+    backend = OpenVocabularyYoloBackend()
     backend.configure({"imgsz": 1024, "conf_threshold": 0.73})
     backend._tracker = _FakeTracker()
 
@@ -51,7 +51,7 @@ def test_infer_uses_configured_imgsz_and_conf(monkeypatch):
 
 
 def test_resolve_checkpoint_path_maps_bare_pt_to_weights_dir():
-    resolved = YoloBackend._resolve_checkpoint_path(
+    resolved = OpenVocabularyYoloBackend._resolve_checkpoint_path(
         "yoloe-11s-seg.pt",
         {"weights_dir": Path("/tmp/cache/models")},
     )
@@ -59,7 +59,7 @@ def test_resolve_checkpoint_path_maps_bare_pt_to_weights_dir():
 
 
 def test_resolve_checkpoint_path_keeps_absolute_path():
-    resolved = YoloBackend._resolve_checkpoint_path(
+    resolved = OpenVocabularyYoloBackend._resolve_checkpoint_path(
         "/models/custom.pt",
         {"weights_dir": Path("/tmp/cache/models")},
     )

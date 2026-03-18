@@ -5,12 +5,12 @@ Task nodes resolve their backend at construction time using this registry.
 
 Example::
 
-    @BackendRegistry.register(task="detection", model="yolo")
-    class YoloBackend:
+    @BackendRegistry.register(task="detection", model="yolo_detector")
+    class YoloDetectorBackend:
         ...
 
     # Later, in a task node:
-    backend = BackendRegistry.get(task="detection", model="yolo")
+    backend = BackendRegistry.get(task="detection", model="yolo_detector")
 """
 from __future__ import annotations
 
@@ -35,15 +35,15 @@ class BackendRegistry:
 
         Args:
             task: Task category (e.g. "detection", "embedding").
-            model: Model family (e.g. "yolo", "siglip2", "clip").
+            model: Model family (e.g. "yolo_detector", "siglip2", "clip").
 
         Returns:
             Decorator that registers the class and returns it unchanged.
 
         Example::
 
-            @BackendRegistry.register(task="detection", model="yolo")
-            class YoloBackend:
+            @BackendRegistry.register(task="detection", model="yolo_detector")
+            class YoloDetectorBackend:
                 ...
         """
         def wrapper(backend_cls):
@@ -69,7 +69,7 @@ class BackendRegistry:
 
         Args:
             task: Task category (e.g. "detection").
-            model: Model family (e.g. "yolo").
+            model: Model family (e.g. "yolo_detector").
 
         Returns:
             An instance of the registered backend class.
