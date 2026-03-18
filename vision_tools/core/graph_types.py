@@ -69,7 +69,7 @@ class Crops(GraphModel):
 class Embedding(GraphModel):
     vector: list[float] = Field(default_factory=list)
     model_id: str
-    dimension: int = Field(..., gt=0)
+    dimension: int = Field(..., ge=0)
 
 
 class Caption(GraphModel):

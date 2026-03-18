@@ -13,6 +13,7 @@ class EmbedderConfig(BaseModel):
     task: InferenceTask = Field(
         default=InferenceTask.EMBEDDING,
         description="Inference task category for model catalog resolution.",
+        json_schema_extra={"x-internal": True},
     )
     model_family: str = Field(
         "siglip2",
@@ -29,10 +30,12 @@ class EmbedderConfig(BaseModel):
     runtime: str | None = Field(
         default=None,
         description="Optional runtime override. Defaults to the catalog runtime for the selected device.",
+        json_schema_extra={"x-internal": True},
     )
     artifact_path: str | None = Field(
         default=None,
         description="Optional local artifact path. When set, it overrides catalog checkpoint resolution.",
+        json_schema_extra={"x-internal": True},
     )
 
 class Embedder(ModelNode):
