@@ -12,10 +12,10 @@ from vision_tools.nodes.logic.logic_node import LogicNode
 
 
 class BufferNodeConfig(BaseModel):
-    item_type: str
-    window_size_seconds: float = Field(..., gt=0.0)
-    emit_every_frames: int = Field(1, ge=1)
-    emit_on_empty: bool = True
+    item_type: str = Field(description="Graph type name of the items being buffered (e.g. 'Detections', 'Image').", json_schema_extra={"x-advanced": True})
+    window_size_seconds: float = Field(..., gt=0.0, description="Rolling time window length in seconds. Items older than this are evicted.")
+    emit_every_frames: int = Field(1, ge=1, description="Emit the history buffer every N frames. Use values >1 to reduce downstream load.", json_schema_extra={"x-advanced": True})
+    emit_on_empty: bool = Field(True, description="Emit an empty History when the window contains no items. Set to False to suppress output on empty windows.")
 
 
 class BufferNode(LogicNode):
@@ -39,7 +39,9 @@ class BufferNode(LogicNode):
             return
         producer_id, producer_port = binding.split(".", 1)
         if producer_id == SOURCE_NODE_ID:
-            raise ValueError("BufferNode cannot buffer input ports in phase 1.")
+            # Buffering source ports (e.g. input.image) is valid — used by pre-roll
+            # templates that need a rolling window of raw frames.
+            return
         producer = nodes[producer_id]
         source_type = producer.get_output_ports()[producer_port]
         if source_type != self._item_type:

@@ -19,17 +19,17 @@ from vision_tools.runtime.model_catalog import ModelCatalog
 
 
 class SegmenterConfig(BaseModel):
-    task: InferenceTask = Field(default=InferenceTask.SEGMENTATION)
-    model_family: str = Field("yolo_seg")
-    size: ModelSize = Field(ModelSize.SMALL)
-    device: DeviceTarget = Field(DeviceTarget.AUTO)
-    imgsz: int = Field(640, gt=0)
-    conf_threshold: float = Field(0.25, ge=0.0, le=1.0)
-    training_mode: TrainingMode = Field(TrainingMode.NONE)
-    dataset_id: str | None = None
-    model_source: ModelSource = Field(ModelSource.BASE)
-    model_asset_version_id: str | None = None
-    artifact_path: str | None = None
+    task: InferenceTask = Field(default=InferenceTask.SEGMENTATION, json_schema_extra={"x-internal": True})
+    model_family: str = Field("yolo_seg", description="Segmentation backend family (e.g. 'yolo_seg').")
+    size: ModelSize = Field(ModelSize.SMALL, description="Model size tier used when resolving the checkpoint from the catalog.")
+    device: DeviceTarget = Field(DeviceTarget.AUTO, description="Preferred execution device (CPU, CUDA, or auto-detect).")
+    imgsz: int = Field(640, gt=0, description="Input image resolution for inference preprocessing.", json_schema_extra={"x-advanced": True})
+    conf_threshold: float = Field(0.25, ge=0.0, le=1.0, description="Minimum confidence score to emit a segmentation mask.", json_schema_extra={"x-ui-widget": "slider"})
+    training_mode: TrainingMode = Field(TrainingMode.NONE, json_schema_extra={"x-internal": True})
+    dataset_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    model_source: ModelSource = Field(ModelSource.BASE, json_schema_extra={"x-internal": True})
+    model_asset_version_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    artifact_path: str | None = Field(None, json_schema_extra={"x-internal": True})
 
 
 class Segmenter(ModelNode):

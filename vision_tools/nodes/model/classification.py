@@ -19,17 +19,17 @@ from vision_tools.runtime.model_catalog import ModelCatalog
 
 
 class ClassifierConfig(BaseModel):
-    task: InferenceTask = Field(default=InferenceTask.CLASSIFICATION)
-    model_family: str = Field("yolo_cls")
-    size: ModelSize = Field(ModelSize.SMALL)
-    device: DeviceTarget = Field(DeviceTarget.AUTO)
-    imgsz: int = Field(224, gt=0)
-    topk: int = Field(3, ge=1, le=20)
-    training_mode: TrainingMode = Field(TrainingMode.NONE)
-    dataset_id: str | None = None
-    model_source: ModelSource = Field(ModelSource.BASE)
-    model_asset_version_id: str | None = None
-    artifact_path: str | None = None
+    task: InferenceTask = Field(default=InferenceTask.CLASSIFICATION, json_schema_extra={"x-internal": True})
+    model_family: str = Field("yolo_cls", description="Classification backend family (e.g. 'yolo_cls').")
+    size: ModelSize = Field(ModelSize.SMALL, description="Model size tier used when resolving the checkpoint from the catalog.")
+    device: DeviceTarget = Field(DeviceTarget.AUTO, description="Preferred execution device (CPU, CUDA, or auto-detect).")
+    imgsz: int = Field(224, gt=0, description="Input image resolution for inference preprocessing.", json_schema_extra={"x-advanced": True})
+    topk: int = Field(3, ge=1, le=20, description="Number of top predicted classes to return per image.")
+    training_mode: TrainingMode = Field(TrainingMode.NONE, json_schema_extra={"x-internal": True})
+    dataset_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    model_source: ModelSource = Field(ModelSource.BASE, json_schema_extra={"x-internal": True})
+    model_asset_version_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    artifact_path: str | None = Field(None, json_schema_extra={"x-internal": True})
 
 
 class Classifier(ModelNode):

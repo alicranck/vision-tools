@@ -19,19 +19,19 @@ from vision_tools.runtime.model_catalog import ModelCatalog
 
 
 class DetectionNodeConfig(BaseModel):
-    task: InferenceTask = Field(default=InferenceTask.DETECTION)
-    model_family: str = Field("yolo_detector")
-    size: ModelSize = Field(ModelSize.SMALL)
-    device: DeviceTarget = Field(DeviceTarget.AUTO)
-    vocabulary: list[str] = Field(default_factory=list)
-    imgsz: int = Field(640, gt=0)
-    conf_threshold: float = Field(0.25, ge=0.0, le=1.0)
-    prompt_free: bool = True
-    training_mode: TrainingMode = Field(TrainingMode.NONE)
-    dataset_id: str | None = None
-    model_source: ModelSource = Field(ModelSource.BASE)
-    model_asset_version_id: str | None = None
-    artifact_path: str | None = None
+    task: InferenceTask = Field(default=InferenceTask.DETECTION, json_schema_extra={"x-internal": True})
+    model_family: str = Field("yolo_detector", description="Detection backend family (e.g. 'yolo_detector').")
+    size: ModelSize = Field(ModelSize.SMALL, description="Model size tier used when resolving the checkpoint from the catalog.")
+    device: DeviceTarget = Field(DeviceTarget.AUTO, description="Preferred execution device (CPU, CUDA, or auto-detect).")
+    vocabulary: list[str] = Field(default_factory=list, description="Class names to detect. Leave empty to use the model's built-in classes.")
+    imgsz: int = Field(640, gt=0, description="Input image resolution for inference preprocessing.", json_schema_extra={"x-advanced": True})
+    conf_threshold: float = Field(0.25, ge=0.0, le=1.0, description="Minimum confidence score to emit a detection.", json_schema_extra={"x-ui-widget": "slider"})
+    prompt_free: bool = Field(True, json_schema_extra={"x-internal": True})
+    training_mode: TrainingMode = Field(TrainingMode.NONE, json_schema_extra={"x-internal": True})
+    dataset_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    model_source: ModelSource = Field(ModelSource.BASE, json_schema_extra={"x-internal": True})
+    model_asset_version_id: str | None = Field(None, json_schema_extra={"x-internal": True})
+    artifact_path: str | None = Field(None, json_schema_extra={"x-internal": True})
 
 
 class _BaseDetector(ModelNode):
@@ -110,7 +110,12 @@ class OpenVocabularyDetector(_BaseDetector):
         config: dict | None = None,
         **kwargs,
     ) -> None:
-        merged = {"task": InferenceTask.OPEN_VOCAB_DETECTION, "prompt_free": False, **(config or {})}
+        merged = {
+            "model_family": "yolo",
+            **(config or {}),
+            "task": InferenceTask.OPEN_VOCAB_DETECTION,
+            "prompt_free": False,
+        }
         super().__init__(node_id=node_id, config=merged, **kwargs)
 
 
@@ -122,5 +127,10 @@ class Detector(_BaseDetector):
     }
 
     def __init__(self, node_id: str = "detector", config: dict | None = None, **kwargs) -> None:
-        merged = {"task": InferenceTask.DETECTION, "prompt_free": True, **(config or {})}
+        merged = {
+            "model_family": "yolo_detector",
+            **(config or {}),
+            "task": InferenceTask.DETECTION,
+            "prompt_free": True,
+        }
         super().__init__(node_id=node_id, config=merged, **kwargs)

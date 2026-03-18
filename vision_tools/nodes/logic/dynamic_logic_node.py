@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel, Field
 
@@ -10,10 +13,10 @@ from vision_tools.nodes.logic.logic_node import LogicNode
 
 
 class DynamicLogicConfig(BaseModel):
-    input_ports: dict[str, str] = Field(default_factory=dict)
-    output_ports: dict[str, str] = Field(default_factory=dict)
-    code: str
-    params: dict[str, Any] = Field(default_factory=dict)
+    input_ports: dict[str, str] = Field(default_factory=dict, description="Mapping of port name to graph type name for each input (e.g. {'detections': 'Detections'}).", json_schema_extra={"x-advanced": True})
+    output_ports: dict[str, str] = Field(default_factory=dict, description="Mapping of port name to graph type name for each output (e.g. {'result': 'Detections'}).", json_schema_extra={"x-advanced": True})
+    code: str = Field(description="Python source defining an execute(inputs, context, config, state) function. Must return a dict matching the declared output ports.", json_schema_extra={"x-ui-widget": "code"})
+    params: dict[str, Any] = Field(default_factory=dict, description="Static parameters accessible inside the execute function via the 'config' argument.", json_schema_extra={"x-advanced": True})
 
 
 class DynamicLogicNode(LogicNode):
@@ -73,7 +76,16 @@ class DynamicLogicNode(LogicNode):
     def execute(self, inputs: dict[str, Any], context: NodeContext) -> dict[str, Any]:
         self._compile()
         assert self._user_execute is not None
-        result = self._user_execute(inputs, context, self.params, self._state_store)
+        try:
+            result = self._user_execute(inputs, context, self.params, self._state_store)
+        except Exception as exc:
+            logger.warning(
+                "dynamic_logic_node_execute_error",
+                extra={"node_id": self.node_id, "frame_idx": context.frame_idx, "error": str(exc)},
+            )
+            raise RuntimeError(
+                f"{self.node_id}: user code raised {type(exc).__name__}: {exc}"
+            ) from exc
         if not isinstance(result, dict):
             raise TypeError(f"{self.node_id}: dynamic logic must return a dict of outputs.")
         return result

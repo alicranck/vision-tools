@@ -10,9 +10,9 @@ from vision_tools.nodes.logic.logic_node import LogicNode
 
 
 class CropNodeConfig(BaseModel):
-    padding: float = Field(0.0, ge=0.0)
-    clip_to_image: bool = True
-    skip_invalid_boxes: bool = True
+    padding: float = Field(0.0, ge=0.0, description="Fractional padding added around each bounding box before cropping (e.g. 0.1 = 10% of box size).")
+    clip_to_image: bool = Field(True, description="Clamp crop coordinates to the image boundary so crops never exceed the frame edges.")
+    skip_invalid_boxes: bool = Field(True, description="Skip boxes whose crop area is zero instead of raising an error.", json_schema_extra={"x-advanced": True})
 
 
 class CropNode(LogicNode):

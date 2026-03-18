@@ -7,10 +7,10 @@ from vision_tools.nodes.logic.logic_node import LogicNode
 
 
 class TrackNodeConfig(BaseModel):
-    method: str = Field("iou", pattern=r"^iou$")
-    iou_threshold: float = Field(0.3, ge=0.0, le=1.0)
-    max_age: int = Field(30, ge=0)
-    min_hits: int = Field(1, ge=1)
+    method: str = Field("iou", pattern=r"^iou$", description="Matching algorithm used to associate detections to existing tracks.", json_schema_extra={"x-advanced": True})
+    iou_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum IoU overlap required to match a detection to an existing track.", json_schema_extra={"x-ui-widget": "slider"})
+    max_age: int = Field(30, ge=0, description="Number of consecutive frames a track can go unmatched before it is dropped.")
+    min_hits: int = Field(1, ge=1, description="Minimum number of consecutive matched frames before a track is considered confirmed and emitted.")
 
 
 def _iou(a: list[float], b: list[float]) -> float:

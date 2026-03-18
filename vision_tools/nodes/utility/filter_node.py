@@ -7,9 +7,9 @@ from vision_tools.nodes.logic.logic_node import LogicNode
 
 
 class FilterNodeConfig(BaseModel):
-    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    allowed_classes: list[str] = Field(default_factory=list)
-    allowed_class_ids: list[int] = Field(default_factory=list)
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="Discard detections below this confidence score. Leave unset to skip confidence filtering.", json_schema_extra={"x-ui-widget": "slider"})
+    allowed_classes: list[str] = Field(default_factory=list, description="Keep only detections whose class name is in this list. Leave empty to allow all classes.")
+    allowed_class_ids: list[int] = Field(default_factory=list, description="Keep only detections whose class ID is in this list. Leave empty to allow all class IDs.", json_schema_extra={"x-advanced": True})
 
     @model_validator(mode="after")
     def validate_non_empty(self) -> "FilterNodeConfig":

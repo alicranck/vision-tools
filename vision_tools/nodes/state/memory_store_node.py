@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryStoreConfig(BaseModel):
-    store_id: str
-    operation: str = Field("query_and_add", pattern="^(add|nearest_neighbors|query_and_add)$")
-    similarity_threshold: float = Field(0.75, ge=0.0, le=1.0)
-    k: int = Field(1, ge=1)
-    with_image: bool = False  # If True, an 'image' input port is added and stored
-    store_dir: str = ""  # Override default ~/.visionpilot/stores
+    store_id: str = Field(description="Unique identifier for this memory store. Used to persist and reload the embedding index across runs.")
+    operation: str = Field("query_and_add", pattern="^(add|nearest_neighbors|query_and_add)$", description="Operation to perform each frame: 'add' stores the embedding, 'nearest_neighbors' returns top-k matches, 'query_and_add' searches first and only stores if no close match is found.")
+    similarity_threshold: float = Field(0.75, ge=0.0, le=1.0, description="Cosine similarity cutoff for query_and_add: embeddings above this threshold are treated as a known match.", json_schema_extra={"x-ui-widget": "slider"})
+    k: int = Field(1, ge=1, description="Number of nearest neighbours to return for 'nearest_neighbors' and 'query_and_add' operations.")
+    with_image: bool = Field(False, description="If enabled, an 'image' input port is added and the image is saved alongside the embedding for later review.")
+    store_dir: str = Field("", description="Override the default storage directory (~/.visionpilot/stores). Leave empty to use the default.", json_schema_extra={"x-advanced": True})
 
 
 class MemoryStoreNode(LogicNode):
@@ -96,6 +96,13 @@ class MemoryStoreNode(LogicNode):
             raise RuntimeError(f"{self.node_id}: backend not loaded — call load() first")
 
         embedding: Embedding = inputs["embedding"]
+
+        # Empty embedding (e.g. no face detected this frame) — nothing to store or query.
+        if not embedding.vector:
+            if self._config.operation == "add":
+                return {}
+            return {"matches": MemoryMatches(items=[])}
+
         image: Image | None = inputs.get("image")
 
         media_uri: str | None = None

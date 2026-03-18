@@ -9,7 +9,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from vision_tools.core.graph_types import Image
 from vision_tools.core.node import NodeContext
@@ -21,9 +21,9 @@ _DEFAULT_DATASET_DIR = Path.home() / ".visionpilot" / "datasets"
 
 
 class DatasetWriterConfig(BaseModel):
-    dataset_id: str
-    output_dir: str = ""  # Default: ~/.visionpilot/datasets/{dataset_id}/frames/
-    annotation_hint: dict[str, Any] = {}
+    dataset_id: str = Field(description="ID of the dataset to write frames into. Must match an existing dataset in VisionPilot.")
+    output_dir: str = Field("", description="Override the default frames directory (~/.visionpilot/datasets/{dataset_id}/frames/). Leave empty to use the default.", json_schema_extra={"x-advanced": True})
+    annotation_hint: dict[str, Any] = Field(default_factory=dict, description="Pre-filled annotation metadata written into each frame's sidecar JSON to guide the annotation review UI.", json_schema_extra={"x-advanced": True})
 
 
 class DatasetWriterNode(LogicNode):

@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class FileWriterConfig(BaseModel):
-    output_dir: str
-    media_type: str = Field("frame", pattern="^(frame|video_clip)$")
-    filename_template: str = "{timestamp:.3f}_{frame_idx}"
-    fps: int = Field(30, gt=0)
-    format: str = ""  # auto: jpg for frame, mp4 for clip
+    output_dir: str = Field(description="Directory where output files are written. Created automatically if it does not exist.")
+    media_type: str = Field("frame", pattern="^(frame|video_clip)$", description="Write mode: 'frame' saves individual JPEG/PNG images; 'video_clip' encodes a History[Image] buffer as an MP4.")
+    filename_template: str = Field("{timestamp:.3f}_{frame_idx}", description="Template for the output filename (without extension). Supports {timestamp}, {frame_idx}, {camera_id}, and {ts} placeholders.", json_schema_extra={"x-advanced": True})
+    fps: int = Field(30, gt=0, description="Frames per second for video_clip encoding.", json_schema_extra={"x-advanced": True})
+    format: str = Field("", description="File extension override (e.g. 'jpg', 'png', 'mp4'). Leave empty to use the default for the chosen media_type.", json_schema_extra={"x-advanced": True})
 
 
 class FileWriterNode(LogicNode):
