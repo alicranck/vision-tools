@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from pydantic import BaseModel, Field
 
+from vision_tools.core.config import FileMediaType
 from vision_tools.core.graph_types import History, Image
 from vision_tools.core.node import NodeContext
 from vision_tools.core.type_refs import GenericTypeRef, PortTypeRef, SimpleTypeRef
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class FileWriterConfig(BaseModel):
     output_dir: str = Field(description="Directory where output files are written. Created automatically if it does not exist.")
-    media_type: str = Field("frame", pattern="^(frame|video_clip)$", description="Write mode: 'frame' saves individual JPEG/PNG images; 'video_clip' encodes a History[Image] buffer as an MP4.")
+    media_type: FileMediaType = Field(FileMediaType.FRAME, description="Write mode: 'frame' saves individual JPEG/PNG images; 'video_clip' encodes a History[Image] buffer as an MP4.")
     filename_template: str = Field("{timestamp:.3f}_{frame_idx}", description="Template for the output filename (without extension). Supports {timestamp}, {frame_idx}, {camera_id}, and {ts} placeholders.", json_schema_extra={"x-advanced": True})
     fps: int = Field(30, gt=0, description="Frames per second for video_clip encoding.", json_schema_extra={"x-advanced": True})
     format: str = Field("", description="File extension override (e.g. 'jpg', 'png', 'mp4'). Leave empty to use the default for the chosen media_type.", json_schema_extra={"x-advanced": True})
@@ -46,16 +47,21 @@ class FileWriterNode(LogicNode):
         self._out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_input_ports(self) -> dict[str, PortTypeRef]:
-        if self._config.media_type == "frame":
+        if self._config.media_type == FileMediaType.FRAME:
             return {"image": SimpleTypeRef("Image")}
         else:
-            return {"frames": GenericTypeRef("History", SimpleTypeRef("Image"))}
+            # Some templates keep the current image bound alongside the buffered
+            # history even though the clip writer only consumes the history.
+            return {
+                "frames": GenericTypeRef("History", SimpleTypeRef("Image")),
+                "image": SimpleTypeRef("Image"),
+            }
 
     def get_output_ports(self) -> dict[str, PortTypeRef]:
         return {}  # sink node — no outputs
 
     def execute(self, inputs: dict[str, Any], context: NodeContext) -> dict[str, Any]:
-        if self._config.media_type == "frame":
+        if self._config.media_type == FileMediaType.FRAME:
             self._write_frame(inputs["image"], context)
         else:
             self._write_clip(inputs["frames"], context)
@@ -75,7 +81,7 @@ class FileWriterNode(LogicNode):
         return self._out_dir / f"{name}.{extension}"
 
     def _write_frame(self, image: Image, context: NodeContext) -> None:
-        ext = self._config.format or "jpg"
+        ext = self._config.format or ("jpg" if self._config.media_type == FileMediaType.FRAME else "mp4")
         path = self._filename(context, ext)
         data = self._to_bgr(image.data)
         ok = cv2.imwrite(str(path), data)
@@ -90,7 +96,7 @@ class FileWriterNode(LogicNode):
             logger.debug("file_writer_clip_empty", node_id=self.node_id)
             return
 
-        ext = self._config.format or "mp4"
+        ext = self._config.format or "mp4"  # video_clip default
         path = self._filename(context, ext)
 
         first: Image = frames[0]

@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from pydantic import BaseModel, Field
 
+from vision_tools.core.config import MemoryOperation
 from vision_tools.core.graph_types import Embedding, Image, MemoryMatch, MemoryMatches
 from vision_tools.core.node import NodeContext
 from vision_tools.core.type_refs import PortTypeRef, SimpleTypeRef
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class MemoryStoreConfig(BaseModel):
     store_id: str = Field(description="Unique identifier for this memory store. Used to persist and reload the embedding index across runs.")
-    operation: str = Field("query_and_add", pattern="^(add|nearest_neighbors|query_and_add)$", description="Operation to perform each frame: 'add' stores the embedding, 'nearest_neighbors' returns top-k matches, 'query_and_add' searches first and only stores if no close match is found.")
+    operation: MemoryOperation = Field(MemoryOperation.QUERY_AND_ADD, description="Operation to perform each frame: 'add' stores the embedding, 'nearest_neighbors' returns top-k matches, 'query_and_add' searches first and only stores if no close match is found.")
     similarity_threshold: float = Field(0.75, ge=0.0, le=1.0, description="Cosine similarity cutoff for query_and_add: embeddings above this threshold are treated as a known match.", json_schema_extra={"x-ui-widget": "slider"})
     k: int = Field(1, ge=1, description="Number of nearest neighbours to return for 'nearest_neighbors' and 'query_and_add' operations.")
     with_image: bool = Field(False, description="If enabled, an 'image' input port is added and the image is saved alongside the embedding for later review.")
@@ -77,13 +78,12 @@ class MemoryStoreNode(LogicNode):
 
     def get_input_ports(self) -> dict[str, PortTypeRef]:
         ports: dict[str, PortTypeRef] = {"embedding": SimpleTypeRef("Embedding")}
-        if self._config.with_image or self._config.operation in ("add", "query_and_add"):
-            if self._config.with_image:
-                ports["image"] = SimpleTypeRef("Image")
+        if self._config.with_image:
+            ports["image"] = SimpleTypeRef("Image")
         return ports
 
     def get_output_ports(self) -> dict[str, PortTypeRef]:
-        if self._config.operation == "add":
+        if self._config.operation == MemoryOperation.ADD:
             return {}  # write-only
         return {"matches": SimpleTypeRef("MemoryMatches")}
 
@@ -125,11 +125,11 @@ class MemoryStoreNode(LogicNode):
         )
 
         op = self._config.operation
-        if op == "add":
+        if op == MemoryOperation.ADD:
             self._backend.add(entry)
             return {}
 
-        elif op == "nearest_neighbors":
+        elif op == MemoryOperation.NEAREST_NEIGHBORS:
             raw = self._backend.nearest_neighbors(embedding.vector, self._config.k)
             return {"matches": self._to_graph_type(raw)}
 
@@ -165,7 +165,10 @@ class MemoryStoreNode(LogicNode):
             MemoryMatch(
                 entry_id=e.id,
                 label=e.label,
-                similarity=e.metadata.get("_similarity", 0.0),
+                similarity=max(
+                    0.0,
+                    min(1.0, float(e.metadata.get("_similarity", 0.0))),
+                ),
                 media_uri=e.media_uri,
                 metadata={k: v for k, v in e.metadata.items() if k != "_similarity"},
             )
